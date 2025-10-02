@@ -1,5 +1,11 @@
 # Changelog
 
+## 2025-10-02T23-43Z
+- fix: hardened orbit viewer imports to strip BOMs, unwrap nested payloads, and surface friendly errors when 2D exports are empty or malformed.
+- fix: restored the first-person demo by introducing a CDN-backed Three.js import map, applying the shared glass-dark theme, and sanitizing imported layout text.
+- feat: propagated the glass-dark backdrop to the landing page and 2D survey baseline for a consistent prototype suite aesthetic.
+- chore: noted the export/import regression workflow so a fresh 2D export loads instantly in both orbit and first-person demos.
+
 ## 2025-10-02T12-00
 - Added a shared landing page and unified navigation styling across the survey, orbit, and first-person demos using the glass light theme.
 - Preloaded the microscope room layout across 2D and 3D experiences, preventing delete-key conflicts while editing form controls.

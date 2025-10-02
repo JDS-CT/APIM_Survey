@@ -6,9 +6,10 @@
   <title>Room Survey (SVG Drag + Snap) — v1 Baseline</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
+  <link rel="stylesheet" href="../shared/styles/glass_dark_theme.css" />
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: dark;
     }
     * {
       box-sizing: border-box;
@@ -21,6 +22,18 @@
       min-height: 100vh;
       display: grid;
       grid-template-rows: auto 1fr;
+      position: relative;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 18% 18%, rgba(96, 165, 250, 0.2), transparent 45%),
+                  radial-gradient(circle at 82% 14%, rgba(129, 140, 248, 0.24), transparent 52%);
+      opacity: 0.82;
+      pointer-events: none;
+      z-index: -2;
     }
     header {
       display: flex;
@@ -191,7 +204,7 @@
     }
   </style>
 </head>
-<body>
+<body data-room-theme="glass-dark">
   <header>
     <div>
       <strong>Room Survey (Top-Down)</strong>

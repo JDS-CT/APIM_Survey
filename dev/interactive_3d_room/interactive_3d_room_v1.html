@@ -7,10 +7,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://www.x3dom.org/release/x3dom.css">
   <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
+  <link rel="stylesheet" href="../shared/styles/glass_dark_theme.css" />
   <script src="https://www.x3dom.org/release/x3dom.js"></script>
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: dark;
     }
     * {
       box-sizing: border-box;
@@ -23,6 +24,18 @@
       display: grid;
       grid-template-rows: auto 1fr;
       min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.18), transparent 45%),
+                  radial-gradient(circle at 85% 10%, rgba(99, 102, 241, 0.22), transparent 52%);
+      opacity: 0.75;
+      pointer-events: none;
+      z-index: -2;
     }
     header {
       display: flex;
@@ -67,6 +80,11 @@
       gap: 20px;
       padding: 24px;
       min-height: 0;
+    }
+    @media (max-width: 960px) {
+      main {
+        grid-template-columns: 1fr;
+      }
     }
     aside {
       display: grid;
@@ -143,6 +161,17 @@
       transform: translateY(-1px);
       box-shadow: 0 6px 16px var(--room-ui-shadow);
     }
+    .btn.secondary {
+      border-color: rgba(148, 163, 184, 0.25);
+      background: rgba(30, 41, 59, 0.78);
+      color: var(--room-ui-link);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
     .viewport {
       background: var(--room-ui-viewport-bg);
       border-radius: 18px;
@@ -155,10 +184,26 @@
     x3d {
       width: 100%;
       height: 100%;
+      min-height: 520px;
+    }
+    .status-line {
+      font-size: 13px;
+      color: var(--room-ui-muted);
+      min-height: 18px;
+      transition: color 160ms ease;
+    }
+    .status-line[data-tone="success"] {
+      color: #34d399;
+    }
+    .status-line[data-tone="warn"] {
+      color: #facc15;
+    }
+    .status-line[data-tone="error"] {
+      color: #f87171;
     }
   </style>
 </head>
-<body>
+<body data-room-theme="glass-dark">
   <header>
     <div>
       <strong>Interactive 3D Room — Orbit Viewer</strong>
@@ -189,13 +234,18 @@
         <hr>
         <label class="file-label">Import 2D JSON <input id="import2d" type="file" accept="application/json"></label>
         <div class="note">Load a layout exported from the 2D survey. Dimensions and items are populated automatically.</div>
+        <div class="row">
+          <button class="btn secondary" id="saveLayout">Save Layout</button>
+          <button class="btn secondary" id="loadLayout">Load Saved</button>
+        </div>
+        <div class="status-line" id="statusLine" role="status" aria-live="polite"></div>
       </div>
     </aside>
     <section class="viewport">
       <x3d id="viewer" showStat="false" showLog="false">
         <Scene>
-          <Background skyColor="0.98 0.98 0.98"></Background>
-          <NavigationInfo type='"EXAMINE","ANY"' headlight="true"></NavigationInfo>
+          <Background skyColor="0.06 0.08 0.14"></Background>
+          <NavigationInfo type='"EXAMINE" "ANY"' headlight="true"></NavigationInfo>
           <Viewpoint id="vp" description="Home" position="4 2 4" orientation="0 1 0 0"></Viewpoint>
 
           <!-- Room wireframe -->
@@ -248,6 +298,9 @@ const Tymm = document.getElementById('Tymm');
 const applyBtn = document.getElementById('apply');
 const homeBtn = document.getElementById('home');
 const importInput = document.getElementById('import2d');
+const saveBtn = document.getElementById('saveLayout');
+const loadBtn = document.getElementById('loadLayout');
+const statusLine = document.getElementById('statusLine');
 
 const vp = document.getElementById('vp');
 const roomCoords = document.getElementById('roomCoords');
@@ -258,10 +311,13 @@ const triCoords = document.getElementById('triCoords');
 const wallsRoot = document.getElementById('wallsRoot');
 const doorsRoot = document.getElementById('doorsRoot');
 const itemsRoot = document.getElementById('itemsRoot');
+const viewer = document.getElementById('viewer');
 
 const DEFAULT_WALL_THICKNESS_MM = 200;
 const DOOR_DEFAULT_THICKNESS_MM = 80;
 const DOOR_HEIGHT_M = 2.1;
+const LAYOUT_STORAGE_KEY = 'room-orbit-viewer.latest-layout';
+const STATUS_TIMEOUT_MS = 3200;
 
 const FLOOR_ITEM_META = {
   floorBox: { wmm: 600, lmm: 600, color: '0.12 0.53 0.90', height: 0.05 },
@@ -292,11 +348,13 @@ const DOOR_COLOR = '0.29 0.63 0.34';
 
 const layout = {
   room: { Wmm: Number(Wmm.value || 6000), Lmm: Number(Lmm.value || 8000) },
+  triangle: { x: Number(Txmm.value || 0), y: Number(Tymm.value || 0) },
   floor_items: [],
   wall_items: [],
   custom_walls: [],
   doors: []
 };
+let statusTimer = null;
 
 function toNumber(value, fallback = 0) {
   const v = Number(value);
@@ -305,6 +363,150 @@ function toNumber(value, fallback = 0) {
 
 function clearChildren(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function showStatus(message, tone = 'info') {
+  if (!statusLine) return;
+  if (statusTimer) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  if (!message) {
+    statusLine.textContent = '';
+    statusLine.removeAttribute('data-tone');
+    return;
+  }
+  statusLine.textContent = message;
+  statusLine.dataset.tone = tone;
+  statusTimer = setTimeout(() => {
+    statusLine.textContent = '';
+    statusLine.removeAttribute('data-tone');
+  }, STATUS_TIMEOUT_MS);
+}
+
+function persistLayoutLocal(data) {
+  try {
+    if (window.localStorage) {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (err) {
+    console.warn('Failed to persist layout locally', err);
+  }
+}
+
+function loadLayoutLocal() {
+  try {
+    if (!window.localStorage) return null;
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load layout from local storage', err);
+    return null;
+  }
+}
+
+async function saveLayoutRemote(data) {
+  try {
+    const resp = await fetch('/api/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return true;
+  } catch (err) {
+    console.warn('Failed to save layout to server', err);
+    return false;
+  }
+}
+
+async function loadLayoutRemote() {
+  try {
+    const resp = await fetch('/api/layout', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    if (!resp.ok) {
+      if (resp.status === 404) return null;
+      throw new Error(await resp.text());
+    }
+    const text = await resp.text();
+    if (!text) return null;
+    const payload = JSON.parse(text);
+    if (payload && typeof payload === 'object' && payload.layout !== undefined) {
+      return payload.layout;
+    }
+    if (payload && typeof payload === 'object') {
+      return payload;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Failed to load layout from server', err);
+    return null;
+  }
+}
+
+function snapshotLayout() {
+  const triangle = layout.triangle || { x: 0, y: 0 };
+  return {
+    room: { W: toNumber(layout.room.Wmm, 6000), L: toNumber(layout.room.Lmm, 8000) },
+    triangle: {
+      x: toNumber(triangle.x, 0),
+      y: toNumber(triangle.y, 0)
+    },
+    floor_items: (layout.floor_items || []).map(item => {
+      const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
+      return {
+        id: item.id,
+        type: item.type,
+        x: toNumber(item.x, 0),
+        y: toNumber(item.y, 0),
+        w: toNumber(item.w, meta.wmm),
+        l: toNumber(item.l, meta.lmm),
+        rotation: toNumber(item.rotation, 0)
+      };
+    }),
+    wall_items: (layout.wall_items || []).map(item => ({
+      id: item.id,
+      type: item.type,
+      wall: item.wall,
+      s: toNumber(item.s, 0),
+      h: toNumber(item.h, 0)
+    })),
+    custom_walls: (layout.custom_walls || []).map(wall => ({
+      id: wall.id,
+      name: wall.name,
+      x1: toNumber(wall.x1, 0),
+      y1: toNumber(wall.y1, 0),
+      x2: toNumber(wall.x2, 0),
+      y2: toNumber(wall.y2, 0),
+      thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM)
+    })),
+    doors: (layout.doors || []).map(door => ({
+      id: door.id,
+      wall: door.wall,
+      offset: toNumber(door.offset, 0),
+      width: toNumber(door.width, 900),
+      thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM)
+    }))
+  };
+}
+
+async function restorePersistedLayout(options = {}) {
+  const { preferRemote = false } = options;
+  const order = preferRemote ? ['remote', 'local'] : ['local', 'remote'];
+  for (const source of order) {
+    if (source === 'local') {
+      const local = loadLayoutLocal();
+      if (local) return { data: local, source: 'local' };
+    } else {
+      const remote = await loadLayoutRemote();
+      if (remote) return { data: remote, source: 'server' };
+    }
+  }
+  return null;
 }
 
 function ensureLayoutIds() {
@@ -601,25 +803,45 @@ function ingestLayout(data) {
   if (Array.isArray(data.doors)) {
     layout.doors = data.doors.map(normalizeDoor);
   }
+  let triX = layout.triangle ? toNumber(layout.triangle.x, toNumber(Txmm.value, 0)) : toNumber(Txmm.value, 0);
+  let triY = layout.triangle ? toNumber(layout.triangle.y, toNumber(Tymm.value, 0)) : toNumber(Tymm.value, 0);
   if (data.triangle) {
-    if (data.triangle.x !== undefined) Txmm.value = toNumber(data.triangle.x, toNumber(Txmm.value, 0));
-    if (data.triangle.y !== undefined) Tymm.value = toNumber(data.triangle.y, toNumber(Tymm.value, 0));
+    if (data.triangle.x !== undefined) triX = toNumber(data.triangle.x, triX);
+    if (data.triangle.y !== undefined) triY = toNumber(data.triangle.y, triY);
   }
+  layout.triangle = { x: triX, y: triY };
+  Txmm.value = layout.triangle.x;
+  Tymm.value = layout.triangle.y;
   ensureLayoutIds();
 }
 
-function apply() {
+function apply(options = {}) {
+  const { fromUser = false, skipStatus = false, skipPersist = false } = options;
   layout.room.Wmm = toNumber(Wmm.value, layout.room.Wmm);
   layout.room.Lmm = toNumber(Lmm.value, layout.room.Lmm);
+  layout.triangle = {
+    x: toNumber(Txmm.value, layout.triangle ? layout.triangle.x : 0),
+    y: toNumber(Tymm.value, layout.triangle ? layout.triangle.y : 0)
+  };
   const Wm = mm2m(layout.room.Wmm);
   const Lm = mm2m(layout.room.Lmm);
-  const xm = mm2m(toNumber(Txmm.value, 0));
-  const zm = mm2m(toNumber(Tymm.value, 0));
+  const xm = mm2m(layout.triangle.x);
+  const zm = mm2m(layout.triangle.y);
   buildRoomEdges(Wm, Lm, Hm);
   buildGrid(Wm, Lm);
   updateTriangle(xm, zm);
   fitView(Wm, Lm, Hm);
+  if (viewer && viewer.runtime) {
+    if (typeof viewer.runtime.resetExamine === 'function') viewer.runtime.resetExamine();
+    if (typeof viewer.runtime.showAll === 'function') viewer.runtime.showAll();
+  }
   renderLayout3d();
+  if (!skipPersist) {
+    persistLayoutLocal(snapshotLayout());
+  }
+  if (fromUser && !skipStatus) {
+    showStatus('Layout updated.', 'success');
+  }
 }
 
 
@@ -633,14 +855,26 @@ function applyDefaultPreset() {
   layout.wall_items = (preset.wall_items || []).map(normalizeWallItem);
   layout.custom_walls = (preset.custom_walls || []).map(normalizeCustomWall);
   layout.doors = (preset.doors || []).map(normalizeDoor);
+  const presetTriangle = preset.triangle || { x: layout.room.Wmm / 2, y: layout.room.Lmm / 2 };
+  layout.triangle = {
+    x: toNumber(presetTriangle.x, layout.room.Wmm / 2),
+    y: toNumber(presetTriangle.y, layout.room.Lmm / 2)
+  };
+  Txmm.value = layout.triangle.x;
+  Tymm.value = layout.triangle.y;
   ensureLayoutIds();
-  apply();
+  apply({ skipStatus: true });
 }
 
-applyBtn.addEventListener('click', apply);
+applyBtn.addEventListener('click', () => apply({ fromUser: true }));
 
 homeBtn.addEventListener('click', () => {
   fitView(mm2m(layout.room.Wmm), mm2m(layout.room.Lmm), Hm);
+  if (viewer && viewer.runtime) {
+    if (typeof viewer.runtime.resetExamine === 'function') viewer.runtime.resetExamine();
+    if (typeof viewer.runtime.showAll === 'function') viewer.runtime.showAll();
+  }
+  showStatus('Camera reset to home view.', 'info');
 });
 
 importInput.addEventListener('change', evt => {
@@ -651,7 +885,8 @@ importInput.addEventListener('change', evt => {
     try {
       const data = JSON.parse(e.target.result);
       ingestLayout(data);
-      apply();
+      apply({ skipStatus: true });
+      showStatus('Layout imported from file.', 'success');
     } catch (err) {
       console.error('Failed to load layout', err);
       alert('Unable to parse layout file. Please ensure it is a valid export from the 2D survey.');
@@ -660,7 +895,59 @@ importInput.addEventListener('change', evt => {
   reader.readAsText(file);
 });
 
-applyDefaultPreset();
+if (saveBtn) {
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    try {
+      const snapshot = snapshotLayout();
+      persistLayoutLocal(snapshot);
+      const remoteOk = await saveLayoutRemote(snapshot);
+      showStatus(remoteOk ? 'Layout saved to server.' : 'Saved locally. Server unavailable?', remoteOk ? 'success' : 'warn');
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+}
+
+if (loadBtn) {
+  loadBtn.addEventListener('click', async () => {
+    loadBtn.disabled = true;
+    try {
+      const restored = await restorePersistedLayout({ preferRemote: true });
+      if (restored) {
+        ingestLayout(restored.data);
+        apply({ skipStatus: true });
+        const tone = restored.source === 'server' ? 'success' : 'info';
+        const message = restored.source === 'server'
+          ? 'Layout loaded from server.'
+          : 'Layout loaded from this browser.';
+        showStatus(message, tone);
+      } else {
+        showStatus('No saved layout found yet.', 'warn');
+      }
+    } finally {
+      loadBtn.disabled = false;
+    }
+  });
+}
+
+async function initializeViewer() {
+  const restored = await restorePersistedLayout();
+  if (restored) {
+    ingestLayout(restored.data);
+    apply({ skipStatus: true });
+    const tone = restored.source === 'server' ? 'success' : 'info';
+    const message = restored.source === 'server'
+      ? 'Restored saved layout from server.'
+      : 'Restored layout from previous browser session.';
+    showStatus(message, tone);
+  } else {
+    applyDefaultPreset();
+    showStatus('Loaded demo preset layout.', 'info');
+  }
+}
+
+initializeViewer();
   </script>
 </body>
 </html>

@@ -1,0 +1,28 @@
+:root[data-room-theme="glass-dark"],
+body[data-room-theme="glass-dark"] {
+  --room-ui-bg: #0b1120;
+  --room-ui-text: #e2e8f0;
+  --room-ui-muted: rgba(148, 163, 184, 0.8);
+  --room-ui-muted-strong: rgba(203, 213, 225, 0.9);
+  --room-ui-surface: rgba(15, 23, 42, 0.82);
+  --room-ui-border: rgba(148, 163, 184, 0.2);
+  --room-ui-border-soft: rgba(148, 163, 184, 0.12);
+  --room-ui-link: #60a5fa;
+  --room-ui-button-border: rgba(148, 163, 184, 0.28);
+  --room-ui-button-bg-top: rgba(30, 41, 59, 0.88);
+  --room-ui-button-bg-bottom: rgba(15, 23, 42, 0.88);
+  --room-ui-shadow: rgba(8, 47, 73, 0.45);
+  --room-ui-overlay-bg: rgba(8, 15, 30, 0.82);
+  --room-ui-overlay-text: #e2e8f0;
+  --room-ui-overlay-shadow: rgba(30, 64, 175, 0.35);
+  --room-ui-info-bg: rgba(15, 23, 42, 0.7);
+  --room-ui-info-border: rgba(148, 163, 184, 0.16);
+  --room-ui-legend-text: rgba(226, 232, 240, 0.85);
+  --room-ui-legend-wall: #cbd5f5;
+  --room-ui-legend-custom: #fcd34d;
+  --room-ui-legend-door: #4ade80;
+  --room-ui-legend-floor: #60a5fa;
+  --room-ui-legend-asset: #c084fc;
+  --room-ui-viewport-bg: radial-gradient(circle at 20% 20%, rgba(96, 165, 250, 0.22), rgba(15, 23, 42, 0.92));
+  --room-ui-viewport-radial: rgba(59, 130, 246, 0.28);
+}

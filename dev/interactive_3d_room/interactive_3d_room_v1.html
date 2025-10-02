@@ -9,7 +9,9 @@
   <style>
     html, body { height: 100%; margin: 0; }
     body { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; font: 14px/1.4 system-ui; }
-    header { grid-column: 1 / -1; padding: 8px 12px; border-bottom: 1px solid #eee; }
+    header { grid-column: 1 / -1; padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    header nav a { color: #1976d2; text-decoration: none; font-weight: 600; }
+    header nav a:hover { text-decoration: underline; }
     aside { padding: 12px; border-right: 1px solid #eee; display: grid; gap: 8px; align-content: start; }
     main { position: relative; }
     x3d { width: 100%; height: calc(100vh - 48px); }
@@ -18,11 +20,17 @@
     .row { display: flex; gap: 8px; align-items: center; }
     .note { font-size: 12px; color: #555; }
     .btn { padding: 6px 10px; border: 1px solid #444; background: #f0f0f0; cursor: pointer; }
+    .file-label { flex-direction: column; align-items: flex-start; gap: 4px; font-weight: 600; }
+    .file-label input { width: 100%; }
   </style>
 </head>
 <body>
   <header>
-    <strong>Interactive 3D Room</strong> — inputs on the left. Y-up (X3D), ground plane is X–Z. Height is fixed to 8&nbsp;ft (2.4384&nbsp;m).
+    <div class="title"><strong>Interactive 3D Room</strong> — inputs on the left. Y-up (X3D), ground plane is X–Z. Height is fixed to 8&nbsp;ft (2.4384&nbsp;m).</div>
+    <nav>
+      <a href="../room_survey_min/room_survey_min_v1.html">Open 2D Layout</a>
+      <a href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
+    </nav>
   </header>
   <aside>
     <div class="row"><strong>Units:</strong> millimeters for inputs; converted to meters in 3D.</div>
@@ -37,6 +45,9 @@
       <button class="btn" id="home">Home View</button>
     </div>
     <div class="note">Triangle is a flat marker on the floor. (X, Y) here maps to (X, Z) in the 3D scene.</div>
+    <hr>
+    <label class="file-label">Import 2D JSON <input id="import2d" type="file" accept="application/json"></label>
+    <div class="note">Load a layout exported from the 2D survey. Dimensions and items are populated automatically.</div>
   </aside>
   <main>
     <x3d id="viewer" showStat="false" showLog="false">
@@ -72,6 +83,11 @@
             </IndexedFaceSet>
           </Shape>
         </Transform>
+
+        <!-- Extruded items (populated from 2D layout) -->
+        <Transform id="wallsRoot"></Transform>
+        <Transform id="doorsRoot"></Transform>
+        <Transform id="itemsRoot"></Transform>
       </Scene>
     </x3d>
   </main>
@@ -87,6 +103,7 @@ const Txmm = document.getElementById('Txmm');
 const Tymm = document.getElementById('Tymm');
 const applyBtn = document.getElementById('apply');
 const homeBtn = document.getElementById('home');
+const importInput = document.getElementById('import2d');
 
 const vp = document.getElementById('vp');
 const roomCoords = document.getElementById('roomCoords');
@@ -94,23 +111,123 @@ const roomEdges = document.getElementById('roomEdges');
 const gridLines = document.getElementById('gridLines');
 const triTf = document.getElementById('triTf');
 const triCoords = document.getElementById('triCoords');
+const wallsRoot = document.getElementById('wallsRoot');
+const doorsRoot = document.getElementById('doorsRoot');
+const itemsRoot = document.getElementById('itemsRoot');
+
+const DEFAULT_WALL_THICKNESS_MM = 200;
+const DOOR_DEFAULT_THICKNESS_MM = 80;
+const DOOR_HEIGHT_M = 2.1;
+
+const FLOOR_ITEM_META = {
+  floorBox: { wmm: 600, lmm: 600, color: '0.12 0.53 0.90', height: 0.05 },
+  microscope: { wmm: 2200, lmm: 1800, color: '0.55 0.14 0.67', height: 1.6 },
+  table: { wmm: 1800, lmm: 900, color: '0.23 0.33 0.68', height: 0.9 },
+  pump: { wmm: 1200, lmm: 600, color: '0.93 0.44 0.13', height: 0.6 }
+};
+
+const WALL_COLOR = '0.84 0.80 0.76';
+const CUSTOM_WALL_COLOR = '0.65 0.50 0.42';
+const DOOR_COLOR = '0.29 0.63 0.34';
+
+const layout = {
+  room: { Wmm: Number(Wmm.value || 6000), Lmm: Number(Lmm.value || 8000) },
+  floor_items: [],
+  wall_items: [],
+  custom_walls: [],
+  doors: []
+};
+
+function toNumber(value, fallback = 0) {
+  const v = Number(value);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function ensureLayoutIds() {
+  layout.custom_walls = (layout.custom_walls || []).map((wall, idx) => ({
+    ...wall,
+    id: wall.id !== undefined ? String(wall.id) : `cw_${idx}`
+  }));
+  layout.doors = (layout.doors || []).map((door, idx) => ({
+    ...door,
+    id: door.id !== undefined ? String(door.id) : `door_${idx}`
+  }));
+}
+
+function baseWallDefinitions() {
+  const W = layout.room.Wmm;
+  const L = layout.room.Lmm;
+  const t = DEFAULT_WALL_THICKNESS_MM;
+  return [
+    { ref: 'base:1', label: 'Wall 1 (y=0)', start: { x: 0, y: 0 }, end: { x: W, y: 0 }, thickness: t },
+    { ref: 'base:2', label: 'Wall 2 (x=W)', start: { x: W, y: 0 }, end: { x: W, y: L }, thickness: t },
+    { ref: 'base:3', label: 'Wall 3 (y=L)', start: { x: W, y: L }, end: { x: 0, y: L }, thickness: t },
+    { ref: 'base:4', label: 'Wall 4 (x=0)', start: { x: 0, y: L }, end: { x: 0, y: 0 }, thickness: t }
+  ];
+}
+
+function enrichWallGeometry(wall) {
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return null;
+  const tangent = { x: dx / length, y: dy / length };
+  const normal = { x: -tangent.y, y: tangent.x };
+  return { ...wall, length, tangent, normal };
+}
+
+function getCustomWall(ref) {
+  const id = ref.split(':')[1];
+  return layout.custom_walls.find(w => String(w.id) === id);
+}
+
+function getWallGeometry(ref) {
+  if (ref === undefined || ref === null) return null;
+  let normalized = ref;
+  if (typeof normalized === 'number') normalized = `base:${normalized}`;
+  normalized = String(normalized);
+  if (/^\d$/.test(normalized)) normalized = `base:${normalized}`;
+  if (normalized.startsWith('base:')) {
+    const wall = baseWallDefinitions().find(w => w.ref === normalized);
+    return wall ? enrichWallGeometry(wall) : null;
+  }
+  if (normalized.startsWith('custom:')) {
+    const wall = getCustomWall(normalized);
+    if (!wall) return null;
+    return enrichWallGeometry({
+      ref: normalized,
+      label: wall.name || 'Custom Wall',
+      start: { x: toNumber(wall.x1, 0), y: toNumber(wall.y1, 0) },
+      end: { x: toNumber(wall.x2, 0), y: toNumber(wall.y2, 0) },
+      thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM)
+    });
+  }
+  return null;
+}
+
+function pointAlongWall(geom, offsetMm) {
+  const distance = Math.max(0, Math.min(geom.length, offsetMm));
+  return {
+    x: geom.start.x + geom.tangent.x * distance,
+    y: geom.start.y + geom.tangent.y * distance
+  };
+}
 
 function buildRoomEdges(Wm, Lm, Hm) {
-  // 8 corners of a box aligned to axes, with floor origin at (0,0,0)
-  // X right, Y up, Z forward
   const pts = [
-    // bottom rectangle (Y=0): (0,0,0),(W,0,0),(W,0,L),(0,0,L)
     [0,0,0], [Wm,0,0], [Wm,0,Lm], [0,0,Lm],
-    // top rectangle (Y=H)
     [0,Hm,0], [Wm,Hm,0], [Wm,Hm,Lm], [0,Hm,Lm]
   ];
   const pstr = pts.map(p => p.join(' ')).join(' ');
   roomCoords.setAttribute('point', pstr);
-  // Edges as pairs: bottom rectangle, top rectangle, vertical pillars
   const idx = [
-    0,1,-1, 1,2,-1, 2,3,-1, 3,0,-1,   // bottom
-    4,5,-1, 5,6,-1, 6,7,-1, 7,4,-1,   // top
-    0,4,-1, 1,5,-1, 2,6,-1, 3,7,-1    // pillars
+    0,1,-1, 1,2,-1, 2,3,-1, 3,0,-1,
+    4,5,-1, 5,6,-1, 6,7,-1, 7,4,-1,
+    0,4,-1, 1,5,-1, 2,6,-1, 3,7,-1
   ].join(' ');
   roomEdges.setAttribute('coordIndex', idx);
 }
@@ -118,72 +235,257 @@ function buildRoomEdges(Wm, Lm, Hm) {
 function buildGrid(Wm, Lm) {
   const spanX = Math.max(1, Math.ceil(Wm));
   const spanZ = Math.max(1, Math.ceil(Lm));
-  const lines = [];
-  // vertical lines along X (vary Z), at 1m steps
-  for (let x = 0; x <= spanX; x += 1) {
-    lines.push(`${x} 0 0 ${x} 0 ${spanZ} -1`);
-  }
-  // horizontal lines along Z (vary X)
-  for (let z = 0; z <= spanZ; z += 1) {
-    lines.push(`0 0 ${z} ${spanX} 0 ${z} -1`);
-  }
-  gridLines.setAttribute('coordIndex', '0 1 -1'); // dummy; we will set points below
-  // Flatten points sequence for all lines; we need to provide a Coordinate child for IndexedLineSet
-  // X3DOM allows Coordinate inside IndexedLineSet OR direct 'coord' attribute; we'll build a Coordinate child dynamically.
-  // Here we rebuild the entire IndexedLineSet with both coordIndex and Coordinate points.
   const coords = [];
   const indices = [];
   let idx = 0;
-  function addLine(a,b) {
+  function addLine(a, b) {
     coords.push(a, b);
-    indices.push(idx, idx+1, -1);
+    indices.push(idx, idx + 1, -1);
     idx += 2;
   }
-  for (let x=0; x<=spanX; x+=1) addLine([x,0,0],[x,0,spanZ]);
-  for (let z=0; z<=spanZ; z+=1) addLine([0,0,z],[spanX,0,z]);
+  for (let x = 0; x <= spanX; x += 1) addLine([x, 0, 0], [x, 0, spanZ]);
+  for (let z = 0; z <= spanZ; z += 1) addLine([0, 0, z], [spanX, 0, z]);
   const coordEl = document.createElement('Coordinate');
-  coordEl.setAttribute('point', coords.map(p=>p.join(' ')).join(' '));
-  // Clear children then append new Coordinate
+  coordEl.setAttribute('point', coords.map(p => p.join(' ')).join(' '));
   while (gridLines.firstChild) gridLines.removeChild(gridLines.firstChild);
   gridLines.appendChild(coordEl);
   gridLines.setAttribute('coordIndex', indices.join(' '));
 }
 
 function updateTriangle(xm, zm) {
-  // Place the triangle's local origin at (xm, 0, zm). Keep its local geometry a small marker.
   triTf.setAttribute('translation', `${xm} 0 ${zm}`);
-  // Optionally scale triangle with room size (keep visible)
-  const s = Math.max(0.2, Math.min(1.0, Math.min(xm, zm, 1.0) * 0.05));
-  // Keep fixed size for now: defined in triCoords
 }
 
 function fitView(Wm, Lm, Hm) {
-  // Position camera diagonally above the room center
-  const cx = Wm/2, cy = Hm*0.8 + Math.max(Wm, Lm)*0.3, cz = Lm*1.1;
+  const cx = Wm / 2;
+  const cy = Hm * 0.8 + Math.max(Wm, Lm) * 0.3;
+  const cz = Lm * 1.1;
   vp.setAttribute('position', `${cx} ${cy} ${cz}`);
   vp.setAttribute('orientation', `0 1 0 0`);
-  // Let the browser recompute; no need to call resetView
+}
+
+function createBoxShape(length, height, depth, color, transparency = 0.15) {
+  const shape = document.createElement('Shape');
+  const app = document.createElement('Appearance');
+  const material = document.createElement('Material');
+  material.setAttribute('diffuseColor', color);
+  material.setAttribute('transparency', transparency);
+  app.appendChild(material);
+  shape.appendChild(app);
+  const box = document.createElement('Box');
+  box.setAttribute('size', `${Math.max(length, 0.01)} ${Math.max(height, 0.01)} ${Math.max(depth, 0.01)}`);
+  shape.appendChild(box);
+  return shape;
+}
+
+function renderWalls3d() {
+  clearChildren(wallsRoot);
+  const Wm = mm2m(layout.room.Wmm);
+  const Lm = mm2m(layout.room.Lmm);
+  const thickness = mm2m(DEFAULT_WALL_THICKNESS_MM);
+  const baseWalls = [
+    { length: Wm, thickness, x: Wm / 2, z: thickness / 2, rotation: 0 },
+    { length: Wm, thickness, x: Wm / 2, z: Lm - thickness / 2, rotation: 0 },
+    { length: Lm, thickness, x: thickness / 2, z: Lm / 2, rotation: Math.PI / 2 },
+    { length: Lm, thickness, x: Wm - thickness / 2, z: Lm / 2, rotation: Math.PI / 2 }
+  ];
+  baseWalls.forEach(w => {
+    const tf = document.createElement('Transform');
+    tf.setAttribute('translation', `${w.x} ${Hm / 2} ${w.z}`);
+    if (w.rotation) tf.setAttribute('rotation', `0 1 0 ${w.rotation}`);
+    tf.appendChild(createBoxShape(w.length, Hm, w.thickness, WALL_COLOR, 0.25));
+    wallsRoot.appendChild(tf);
+  });
+
+  (layout.custom_walls || []).forEach(wall => {
+    const geom = getWallGeometry(`custom:${wall.id}`);
+    if (!geom) return;
+    const center = {
+      x: mm2m((geom.start.x + geom.end.x) / 2),
+      z: mm2m((geom.start.y + geom.end.y) / 2)
+    };
+    const length = mm2m(geom.length);
+    const thick = mm2m(toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM));
+    const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+    const tf = document.createElement('Transform');
+    tf.setAttribute('translation', `${center.x} ${Hm / 2} ${center.z}`);
+    tf.setAttribute('rotation', `0 1 0 ${angle}`);
+    tf.appendChild(createBoxShape(length, Hm, thick, CUSTOM_WALL_COLOR, 0.15));
+    wallsRoot.appendChild(tf);
+  });
+}
+
+function renderDoors3d() {
+  clearChildren(doorsRoot);
+  (layout.doors || []).forEach(door => {
+    const geom = getWallGeometry(door.wall);
+    if (!geom) return;
+    const offsetStart = pointAlongWall(geom, toNumber(door.offset, 0));
+    const offsetEnd = pointAlongWall(geom, toNumber(door.offset, 0) + toNumber(door.width, 900));
+    const center = {
+      x: mm2m((offsetStart.x + offsetEnd.x) / 2),
+      z: mm2m((offsetStart.y + offsetEnd.y) / 2)
+    };
+    const length = mm2m(Math.min(geom.length, Math.abs(door.width || 900)));
+    const thick = mm2m(toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM));
+    const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+    const tf = document.createElement('Transform');
+    tf.setAttribute('translation', `${center.x} ${DOOR_HEIGHT_M / 2} ${center.z}`);
+    tf.setAttribute('rotation', `0 1 0 ${angle}`);
+    tf.appendChild(createBoxShape(length, DOOR_HEIGHT_M, thick, DOOR_COLOR, 0.1));
+    doorsRoot.appendChild(tf);
+  });
+}
+
+function renderItems3d() {
+  clearChildren(itemsRoot);
+  (layout.floor_items || []).forEach(item => {
+    const type = item.type || 'floorBox';
+    const meta = FLOOR_ITEM_META[type] || FLOOR_ITEM_META.floorBox;
+    const w = mm2m(toNumber(item.w, meta.wmm));
+    const l = mm2m(toNumber(item.l, meta.lmm));
+    const h = meta.height || 0.8;
+    const x = mm2m(toNumber(item.x, layout.room.Wmm / 2));
+    const z = mm2m(toNumber(item.y, layout.room.Lmm / 2));
+    const tf = document.createElement('Transform');
+    tf.setAttribute('translation', `${x} ${h / 2} ${z}`);
+    const rot = toNumber(item.rotation, 0);
+    if (rot) tf.setAttribute('rotation', `0 1 0 ${(rot * Math.PI) / 180}`);
+    tf.appendChild(createBoxShape(w, h, l, meta.color, 0.2));
+    itemsRoot.appendChild(tf);
+  });
+}
+
+function renderLayout3d() {
+  ensureLayoutIds();
+  renderWalls3d();
+  renderDoors3d();
+  renderItems3d();
+}
+
+function normalizeFloorItem(item) {
+  const type = item.type || 'floorBox';
+  const meta = FLOOR_ITEM_META[type] || FLOOR_ITEM_META.floorBox;
+  return {
+    ...item,
+    id: item.id,
+    type,
+    x: toNumber(item.x, layout.room.Wmm / 2),
+    y: toNumber(item.y, layout.room.Lmm / 2),
+    w: toNumber(item.w ?? item.size, meta.wmm),
+    l: toNumber(item.l ?? item.size, meta.lmm),
+    rotation: toNumber(item.rotation, 0)
+  };
+}
+
+function normalizeWallItem(item) {
+  let wallRef = item.wall;
+  if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+  if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  return {
+    ...item,
+    wall: wallRef || 'base:1',
+    s: toNumber(item.s, 0),
+    h: toNumber(item.h, 0)
+  };
+}
+
+function normalizeCustomWall(wall, idx) {
+  return {
+    ...wall,
+    id: wall.id !== undefined ? String(wall.id) : `cw_${idx}`,
+    x1: toNumber(wall.x1, 0),
+    y1: toNumber(wall.y1, 0),
+    x2: toNumber(wall.x2, 0),
+    y2: toNumber(wall.y2, 0),
+    thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM),
+    name: wall.name
+  };
+}
+
+function normalizeDoor(door, idx) {
+  let wallRef = door.wall;
+  if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+  if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  return {
+    ...door,
+    id: door.id !== undefined ? String(door.id) : `door_${idx}`,
+    wall: wallRef || 'base:1',
+    offset: toNumber(door.offset, 0),
+    width: toNumber(door.width, 900),
+    thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM)
+  };
+}
+
+function ingestLayout(data) {
+  if (data.room) {
+    layout.room.Wmm = toNumber(data.room.W, layout.room.Wmm);
+    layout.room.Lmm = toNumber(data.room.L, layout.room.Lmm);
+    Wmm.value = layout.room.Wmm;
+    Lmm.value = layout.room.Lmm;
+  }
+  if (Array.isArray(data.floor_items)) {
+    layout.floor_items = data.floor_items.map(normalizeFloorItem);
+  } else if (Array.isArray(data.items)) {
+    const floor = data.items.filter(it => it.type !== 'socket').map(normalizeFloorItem);
+    const wallItems = data.items.filter(it => it.type === 'socket').map(normalizeWallItem);
+    layout.floor_items = floor;
+    layout.wall_items = wallItems;
+  }
+  if (Array.isArray(data.wall_items)) {
+    layout.wall_items = data.wall_items.map(normalizeWallItem);
+  }
+  if (Array.isArray(data.custom_walls)) {
+    layout.custom_walls = data.custom_walls.map(normalizeCustomWall);
+  }
+  if (Array.isArray(data.doors)) {
+    layout.doors = data.doors.map(normalizeDoor);
+  }
+  if (data.triangle) {
+    if (data.triangle.x !== undefined) Txmm.value = toNumber(data.triangle.x, toNumber(Txmm.value, 0));
+    if (data.triangle.y !== undefined) Tymm.value = toNumber(data.triangle.y, toNumber(Tymm.value, 0));
+  }
+  ensureLayoutIds();
 }
 
 function apply() {
-  const Wm = mm2m(Number(Wmm.value||0));
-  const Lm = mm2m(Number(Lmm.value||0));
-  const xm = mm2m(Number(Txmm.value||0));
-  const zm = mm2m(Number(Tymm.value||0));
-
+  layout.room.Wmm = toNumber(Wmm.value, layout.room.Wmm);
+  layout.room.Lmm = toNumber(Lmm.value, layout.room.Lmm);
+  const Wm = mm2m(layout.room.Wmm);
+  const Lm = mm2m(layout.room.Lmm);
+  const xm = mm2m(toNumber(Txmm.value, 0));
+  const zm = mm2m(toNumber(Tymm.value, 0));
   buildRoomEdges(Wm, Lm, Hm);
   buildGrid(Wm, Lm);
   updateTriangle(xm, zm);
   fitView(Wm, Lm, Hm);
+  renderLayout3d();
 }
 
-// Buttons
 applyBtn.addEventListener('click', apply);
+
 homeBtn.addEventListener('click', () => {
-  fitView(mm2m(Number(Wmm.value||0)), mm2m(Number(Lmm.value||0)), Hm);
+  fitView(mm2m(layout.room.Wmm), mm2m(layout.room.Lmm), Hm);
 });
 
-// Initialize
+importInput.addEventListener('change', evt => {
+  const file = evt.target.files && evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      ingestLayout(data);
+      apply();
+    } catch (err) {
+      console.error('Failed to load layout', err);
+      alert('Unable to parse layout file. Please ensure it is a valid export from the 2D survey.');
+    }
+  };
+  reader.readAsText(file);
+});
+
+ensureLayoutIds();
 apply();
 </script>
 </body>

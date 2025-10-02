@@ -104,7 +104,7 @@ class LayoutHTTPServer(socketserver.ThreadingTCPServer):
 
 
 def run_server(
-    host: str = "0.0.0.0", port: int = 5000, store_path: Path | None = None
+    host: str = "127.0.0.1", port: int = 5000, store_path: Path | None = None
 ) -> None:
     """Run the threaded HTTP server until interrupted."""
     store = store_path or DEFAULT_STORE_PATH
@@ -120,7 +120,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Serve the room survey prototypes with persistence."
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Host/IP to bind")
+    parser.add_argument("--host", default="127.0.0.1", help="Host/IP to bind")
     parser.add_argument("--port", type=int, default=5000, help="Port to listen on")
     parser.add_argument(
         "--store",

@@ -1,0 +1,27 @@
+:root {
+  --room-ui-bg: #f5f7fb;
+  --room-ui-text: #1f2933;
+  --room-ui-muted: rgba(31,41,51,0.68);
+  --room-ui-muted-strong: rgba(31,41,51,0.72);
+  --room-ui-surface: rgba(255,255,255,0.85);
+  --room-ui-border: rgba(31,41,51,0.12);
+  --room-ui-border-soft: rgba(31,41,51,0.08);
+  --room-ui-link: #2563eb;
+  --room-ui-button-border: rgba(31,41,51,0.16);
+  --room-ui-button-bg-top: rgba(255,255,255,0.95);
+  --room-ui-button-bg-bottom: rgba(235,239,245,0.95);
+  --room-ui-shadow: rgba(15,23,42,0.12);
+  --room-ui-overlay-bg: rgba(17,24,39,0.72);
+  --room-ui-overlay-text: #f8fafc;
+  --room-ui-overlay-shadow: rgba(15,23,42,0.35);
+  --room-ui-info-bg: rgba(255,255,255,0.7);
+  --room-ui-info-border: rgba(31,41,51,0.12);
+  --room-ui-legend-text: rgba(31,41,51,0.7);
+  --room-ui-legend-wall: #d4d8e5;
+  --room-ui-legend-custom: #b49a7a;
+  --room-ui-legend-door: #3b8d46;
+  --room-ui-legend-floor: #2e6fba;
+  --room-ui-legend-asset: #8c5dd8;
+  --room-ui-viewport-bg: #dfe6f1;
+  --room-ui-viewport-radial: rgba(180,200,230,0.32);
+}

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>Interactive 3D Room — First-Person Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
   <style>
     :root {
       color-scheme: light dark;
@@ -17,8 +18,8 @@
       display: grid;
       grid-template-rows: auto 1fr;
       min-height: 100vh;
-      background: #f5f7fb;
-      color: #1f2933;
+      background: var(--room-ui-bg);
+      color: var(--room-ui-text);
     }
     header {
       display: flex;
@@ -26,8 +27,8 @@
       justify-content: space-between;
       padding: 12px 16px;
       gap: 16px;
-      border-bottom: 1px solid rgba(31,41,51,0.12);
-      background: rgba(255,255,255,0.85);
+      border-bottom: 1px solid var(--room-ui-border);
+      background: var(--room-ui-surface);
       backdrop-filter: blur(6px);
       position: sticky;
       top: 0;
@@ -39,7 +40,7 @@
       flex-wrap: wrap;
     }
     header nav a {
-      color: #2563eb;
+      color: var(--room-ui-link);
       text-decoration: none;
       font-weight: 600;
     }
@@ -56,8 +57,8 @@
       display: grid;
       gap: 16px;
       align-content: start;
-      border-right: 1px solid rgba(31,41,51,0.08);
-      background: rgba(255,255,255,0.8);
+      border-right: 1px solid var(--room-ui-border-soft);
+      background: var(--room-ui-surface);
     }
     aside h2 {
       margin: 0;
@@ -65,7 +66,7 @@
     }
     aside p {
       margin: 0;
-      color: rgba(31,41,51,0.72);
+      color: var(--room-ui-muted-strong);
       font-size: 14px;
       line-height: 1.5;
     }
@@ -87,8 +88,8 @@
       font: inherit;
       padding: 8px 12px;
       border-radius: 6px;
-      border: 1px solid rgba(31,41,51,0.16);
-      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(235,239,245,0.95));
+      border: 1px solid var(--room-ui-button-border);
+      background: linear-gradient(180deg, var(--room-ui-button-bg-top), var(--room-ui-button-bg-bottom));
       cursor: pointer;
       transition: transform 120ms ease, box-shadow 120ms ease;
       display: inline-flex;
@@ -98,7 +99,7 @@
     }
     button:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(15,23,42,0.12);
+      box-shadow: 0 4px 12px var(--room-ui-shadow);
     }
     button:disabled {
       opacity: 0.6;
@@ -108,7 +109,7 @@
     }
     .viewport {
       position: relative;
-      background: radial-gradient(circle at top, rgba(180,200,230,0.32), transparent 55%), #dfe6f1;
+      background: radial-gradient(circle at top, var(--room-ui-viewport-radial), transparent 55%), var(--room-ui-viewport-bg);
       display: flex;
       align-items: stretch;
       justify-content: center;
@@ -136,14 +137,14 @@
     }
     .overlay .card {
       pointer-events: auto;
-      background: rgba(17,24,39,0.72);
-      color: #f8fafc;
+      background: var(--room-ui-overlay-bg);
+      color: var(--room-ui-overlay-text);
       padding: 18px 20px;
       border-radius: 12px;
       max-width: 320px;
       text-align: center;
       backdrop-filter: blur(10px);
-      box-shadow: 0 12px 40px rgba(15,23,42,0.35);
+      box-shadow: 0 12px 40px var(--room-ui-overlay-shadow);
     }
     .overlay h3 {
       margin: 0 0 8px;
@@ -157,17 +158,24 @@
     .info-box {
       padding: 12px;
       border-radius: 10px;
-      border: 1px solid rgba(31,41,51,0.12);
-      background: rgba(255,255,255,0.7);
+      border: 1px solid var(--room-ui-info-border);
+      background: var(--room-ui-info-bg);
       font-size: 13px;
       line-height: 1.5;
-      color: rgba(31,41,51,0.78);
+      color: var(--room-ui-muted-strong);
+    }
+    .info-box ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+    .info-box li {
+      margin: 4px 0;
     }
     .legend {
       display: grid;
       gap: 6px;
       font-size: 13px;
-      color: rgba(31,41,51,0.7);
+      color: var(--room-ui-legend-text);
     }
     .legend span {
       display: inline-flex;
@@ -212,12 +220,20 @@
         <button id="resetWalk">Reset Walk Position</button>
       </div>
       <div class="info-box" id="roomInfo"></div>
+      <div class="info-box">
+        <strong>Controls</strong>
+        <ul>
+          <li>Click <strong>Enter Walk Mode</strong> to lock the pointer, then use <strong>WASD</strong>, the mouse, and <strong>Space</strong>/<strong>Shift</strong>.</li>
+          <li>Hold <strong>Ctrl</strong> and drag in the viewport (while not walking) to orbit the camera and frame the room before entering.</li>
+          <li>Select the sample asset to reveal the move gizmo, then drag the arrows to reposition it on the floor.</li>
+        </ul>
+      </div>
       <div class="legend">
-        <span><span class="swatch" style="background:#d4d8e5"></span> Walls (default thickness 200&nbsp;mm)</span>
-        <span><span class="swatch" style="background:#b49a7a"></span> Custom walls</span>
-        <span><span class="swatch" style="background:#3b8d46"></span> Doors (2.1&nbsp;m tall)</span>
-        <span><span class="swatch" style="background:#2e6fba"></span> Floor items from survey</span>
-        <span><span class="swatch" style="background:#8c5dd8"></span> Loaded X3D asset</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-wall)"></span> Walls (default thickness 200&nbsp;mm)</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-custom)"></span> Custom walls</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-door)"></span> Doors (2.1&nbsp;m tall)</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-floor)"></span> Floor items from survey</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-asset)"></span> Loaded X3D asset</span>
       </div>
     </aside>
     <section class="viewport">
@@ -401,8 +417,8 @@
         id: item.id,
         x: toNumber(item.x, layout.room.Wmm / 2),
         y: toNumber(item.y, layout.room.Lmm / 2),
-        w: toNumber(item.w ?? item.size, meta.wmm),
-        l: toNumber(item.l ?? item.size, meta.lmm),
+        w: toNumber(item.w !== undefined ? item.w : item.size, meta.wmm),
+        l: toNumber(item.l !== undefined ? item.l : item.size, meta.lmm),
         rotation: toNumber(item.rotation, 0)
       };
     }
@@ -455,8 +471,10 @@
 
     function ingestLayout(data) {
       if (data.room) {
-        layout.room.Wmm = toNumber(data.room.W ?? data.room.Wmm, layout.room.Wmm);
-        layout.room.Lmm = toNumber(data.room.L ?? data.room.Lmm, layout.room.Lmm);
+        const roomW = data.room.W !== undefined ? data.room.W : data.room.Wmm;
+        const roomL = data.room.L !== undefined ? data.room.L : data.room.Lmm;
+        layout.room.Wmm = toNumber(roomW, layout.room.Wmm);
+        layout.room.Lmm = toNumber(roomL, layout.room.Lmm);
       }
       if (Array.isArray(data.floor_items)) {
         layout.floor_items = data.floor_items.map(normalizeFloorItem);
@@ -489,10 +507,17 @@
       for (let i = group.children.length - 1; i >= 0; i -= 1) {
         const child = group.children[i];
         group.remove(child);
-        if (child.geometry) child.geometry.dispose?.();
+        if (child.geometry && typeof child.geometry.dispose === 'function') {
+          child.geometry.dispose();
+        }
         if (child.material) {
-          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose?.());
-          else child.material.dispose?.();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => {
+              if (m && typeof m.dispose === 'function') m.dispose();
+            });
+          } else if (typeof child.material.dispose === 'function') {
+            child.material.dispose();
+          }
         }
       }
     }
@@ -519,6 +544,8 @@
       const minZ = -floorL / 2 + 0.25;
       const maxZ = floorL / 2 - 0.25;
       walkBounds = { minX, maxX, minZ, maxZ, minY: 0.1, maxY: mm2m(ROOM_HEIGHT_MM) - 0.2 };
+      const midHeight = (walkBounds.maxY + walkBounds.minY) / 2;
+      orbitTarget.set(0, midHeight, 0);
     }
 
     function buildWalls() {
@@ -599,7 +626,7 @@
         const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
         const w = mm2m(toNumber(item.w, meta.wmm));
         const l = mm2m(toNumber(item.l, meta.lmm));
-        const h = meta.height ?? 1.0;
+        const h = meta.height !== undefined ? meta.height : 1.0;
         const geometry = new THREE.BoxGeometry(w, h, l);
         const material = new THREE.MeshStandardMaterial({ color: meta.color, roughness: 0.45, metalness: 0.1 });
         const mesh = new THREE.Mesh(geometry, material);
@@ -615,9 +642,9 @@
       const Wm = (layout.room.Wmm / 1000).toFixed(2);
       const Lm = (layout.room.Lmm / 1000).toFixed(2);
       const heightM = (ROOM_HEIGHT_MM / 1000).toFixed(2);
-      const customCount = layout.custom_walls?.length ?? 0;
-      const doorCount = layout.doors?.length ?? 0;
-      const itemCount = layout.floor_items?.length ?? 0;
+      const customCount = layout.custom_walls && layout.custom_walls.length ? layout.custom_walls.length : 0;
+      const doorCount = layout.doors && layout.doors.length ? layout.doors.length : 0;
+      const itemCount = layout.floor_items && layout.floor_items.length ? layout.floor_items.length : 0;
       roomInfo.innerHTML = `Room: <strong>${Wm}m × ${Lm}m</strong> &middot; Height ${heightM}m<br>` +
         `${customCount} custom wall${customCount === 1 ? '' : 's'}, ${doorCount} door${doorCount === 1 ? '' : 's'}, ${itemCount} floor item${itemCount === 1 ? '' : 's'}`;
     }
@@ -715,7 +742,9 @@
 
     transformControls.addEventListener('objectChange', () => {
       if (!selectedObject) return;
-      const baseY = selectedObject.userData.baseY ?? selectedObject.position.y;
+      const baseY = selectedObject.userData && selectedObject.userData.baseY !== undefined
+        ? selectedObject.userData.baseY
+        : selectedObject.position.y;
       selectedObject.position.y = baseY;
       clampAsset(selectedObject);
     });
@@ -731,7 +760,9 @@
       const radius = Math.max(assetSize.x, assetSize.z) / 2;
       const targetX = clamp(0, walkBounds.minX + radius, walkBounds.maxX - radius);
       const targetZ = clamp(0, walkBounds.minZ + radius, walkBounds.maxZ - radius);
-      const baseY = assetAnchor.userData.baseY ?? assetAnchor.position.y;
+      const baseY = assetAnchor.userData && assetAnchor.userData.baseY !== undefined
+        ? assetAnchor.userData.baseY
+        : assetAnchor.position.y;
       assetAnchor.position.set(targetX, baseY, targetZ);
       clampAsset(assetAnchor);
     }
@@ -749,9 +780,12 @@
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    const orbitTarget = new THREE.Vector3(0, 1.6, 0);
+    let orbitState = null;
 
     function onPointerDown(event) {
       if (pointerControls.isLocked) return;
+      if (event.ctrlKey) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -764,7 +798,70 @@
       }
     }
 
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    function beginOrbit(event) {
+      const holder = pointerControls.getObject();
+      const offset = holder.position.clone().sub(orbitTarget);
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(offset);
+      orbitState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        spherical
+      };
+      if (renderer.domElement.setPointerCapture) {
+        renderer.domElement.setPointerCapture(event.pointerId);
+      }
+    }
+
+    function updateOrbit(event) {
+      if (!orbitState) return;
+      const deltaX = event.clientX - orbitState.startX;
+      const deltaY = event.clientY - orbitState.startY;
+      const spherical = orbitState.spherical.clone();
+      spherical.theta -= deltaX * 0.005;
+      spherical.phi = clamp(spherical.phi + deltaY * 0.003, 0.1, Math.PI - 0.1);
+      const radius = Math.max(1.2, spherical.radius);
+      spherical.radius = radius;
+      const offset = new THREE.Vector3().setFromSpherical(spherical);
+      const holder = pointerControls.getObject();
+      holder.position.copy(orbitTarget.clone().add(offset));
+      holder.lookAt(orbitTarget);
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+      orbitState.startX = event.clientX;
+      orbitState.startY = event.clientY;
+      orbitState.spherical = spherical;
+    }
+
+    function endOrbit(event) {
+      if (!orbitState || orbitState.pointerId !== event.pointerId) return;
+      if (renderer.domElement.releasePointerCapture) {
+        try {
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        } catch (err) {}
+      }
+      orbitState = null;
+    }
+
+    function onViewportPointerDown(event) {
+      if (pointerControls.isLocked) return;
+      if (event.ctrlKey) {
+        beginOrbit(event);
+        event.preventDefault();
+        return;
+      }
+      onPointerDown(event);
+    }
+
+    renderer.domElement.addEventListener('pointerdown', onViewportPointerDown);
+    renderer.domElement.addEventListener('pointermove', event => {
+      if (orbitState) {
+        updateOrbit(event);
+      }
+    });
+    renderer.domElement.addEventListener('pointerup', endOrbit);
+    renderer.domElement.addEventListener('pointercancel', endOrbit);
 
     function resetLayout() {
       layout.room.Wmm = 6000;
@@ -805,7 +902,8 @@
     focusAssetBtn.addEventListener('click', () => focusOnAsset());
 
     layoutImport.addEventListener('change', event => {
-      const file = event.target.files?.[0];
+      const files = event.target && event.target.files;
+      const file = files && files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = e => {

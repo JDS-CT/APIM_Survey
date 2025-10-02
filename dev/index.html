@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Room Survey Prototype Suite</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="shared/styles/glass_light_theme.css" />
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--room-ui-bg);
+      color: var(--room-ui-text);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      gap: 16px;
+      border-bottom: 1px solid var(--room-ui-border);
+      background: var(--room-ui-surface);
+      backdrop-filter: blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--room-ui-muted-strong);
+      margin-top: 2px;
+    }
+    nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      color: var(--room-ui-link);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .nav-link:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .nav-link.active {
+      background: rgba(37, 99, 235, 0.18);
+    }
+    main {
+      padding: 32px 24px 48px;
+      display: grid;
+      gap: 28px;
+      max-width: 1120px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .intro {
+      display: grid;
+      gap: 12px;
+      background: var(--room-ui-surface);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--room-ui-border-soft);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+    .intro p {
+      margin: 0;
+      color: var(--room-ui-muted-strong);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .cards {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .card {
+      background: var(--room-ui-surface);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid var(--room-ui-border-soft);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 12px;
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .card p {
+      margin: 0;
+      color: var(--room-ui-muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .cta {
+      align-self: start;
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--room-ui-button-border);
+      background: linear-gradient(180deg, var(--room-ui-button-bg-top), var(--room-ui-button-bg-bottom));
+      color: var(--room-ui-link);
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px var(--room-ui-shadow);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <strong>Room Survey Prototype Suite</strong>
+      <div class="subtitle">Navigate between the 2D editor, orbiting viewer, and first-person walkthrough.</div>
+    </div>
+    <nav>
+      <a class="nav-link active" href="index.html">Home</a>
+      <a class="nav-link" href="room_survey_min/room_survey_min_v1.html">2D Survey</a>
+      <a class="nav-link" href="interactive_3d_room/interactive_3d_room_v1.html">Orbit Viewer</a>
+      <a class="nav-link" href="interactive_3d_room/interactive_3d_room_fps_demo.html">First-Person Demo</a>
+    </nav>
+  </header>
+  <main>
+    <section class="intro">
+      <h1>Coordinate microscope room planning</h1>
+      <p>Use these prototypes to capture a room’s dimensions, keep track of microscope peripherals, and validate the layout in 3D. Start with the top-down survey, then export and inspect the space with the orbit and first-person viewers.</p>
+    </section>
+    <section class="cards">
+      <article class="card">
+        <h2>2D Room Survey</h2>
+        <p>Define room bounds, drag equipment and sockets with grid snapping, export JSON, and hand off the plan for 3D review.</p>
+        <a class="cta" href="room_survey_min/room_survey_min_v1.html">Open 2D Survey</a>
+      </article>
+      <article class="card">
+        <h2>Interactive Orbit Viewer</h2>
+        <p>Import survey exports, extrude walls, doors, and floor items, and orbit around the layout to verify placement in 3D.</p>
+        <a class="cta" href="interactive_3d_room/interactive_3d_room_v1.html">Launch Orbit Viewer</a>
+      </article>
+      <article class="card">
+        <h2>First-Person Walkthrough</h2>
+        <p>Walk through the room with WASD controls, drag sample assets, and evaluate clearances using the imported survey geometry.</p>
+        <a class="cta" href="interactive_3d_room/interactive_3d_room_fps_demo.html">Enter Walkthrough</a>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

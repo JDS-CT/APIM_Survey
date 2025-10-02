@@ -39,13 +39,19 @@
       gap: 12px;
       flex-wrap: wrap;
     }
-    header nav a {
+    .nav-link {
       color: var(--room-ui-link);
       text-decoration: none;
       font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 120ms ease, color 120ms ease;
     }
-    header nav a:hover {
-      text-decoration: underline;
+    .nav-link:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .nav-link.active {
+      background: rgba(37, 99, 235, 0.18);
     }
     main {
       display: grid;
@@ -194,11 +200,13 @@
   <header>
     <div>
       <strong>3D Room Viewer — First-Person Prototype</strong>
-      <div style="font-size:13px;color:rgba(31,41,51,0.68);">Walk inside the imported room layout, experiment with the FreeCAD X3D asset, and preview placement in 3D.</div>
+      <div style="font-size:13px;color:rgba(31,41,51,0.68);">Walk inside the imported room layout, experiment with the FreeCAD <em>dozenSidedStack</em> sample, and preview placement in 3D.</div>
     </div>
     <nav>
-      <a href="../room_survey_min/room_survey_min_v1.html">2D Room Survey</a>
-      <a href="interactive_3d_room_v1.html">Orbit Viewer</a>
+      <a class="nav-link" href="../index.html">Home</a>
+      <a class="nav-link" href="../room_survey_min/room_survey_min_v1.html">2D Survey</a>
+      <a class="nav-link" href="interactive_3d_room_v1.html">Orbit Viewer</a>
+      <a class="nav-link active" href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
     </nav>
   </header>
   <main>
@@ -271,6 +279,22 @@
       table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
       pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 }
     };
+
+    const DEFAULT_ROOM_PRESET = () => ({
+      room: { W: 6000, L: 8000 },
+      floor_items: [
+        { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+        { type: 'table', x: 3800, y: 5200, rotation: 0 },
+        { type: 'pump', x: 4200, y: 3400, rotation: 0 },
+        { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+      ],
+      wall_items: [
+        { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+        { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+      ],
+      custom_walls: [],
+      doors: []
+    });
 
     const layout = {
       room: { Wmm: 6000, Lmm: 8000 },
@@ -495,6 +519,7 @@
       }
       ensureLayoutIds();
       applyLayout();
+      selectObject(null);
     }
 
     function mmPointToWorld(xMm, yMm) {
@@ -864,13 +889,15 @@
     renderer.domElement.addEventListener('pointercancel', endOrbit);
 
     function resetLayout() {
-      layout.room.Wmm = 6000;
-      layout.room.Lmm = 8000;
-      layout.floor_items = [];
-      layout.wall_items = [];
-      layout.custom_walls = [];
-      layout.doors = [];
+      const preset = DEFAULT_ROOM_PRESET();
+      layout.room.Wmm = preset.room.W;
+      layout.room.Lmm = preset.room.L;
+      layout.floor_items = (preset.floor_items || []).map(normalizeFloorItem);
+      layout.wall_items = (preset.wall_items || []).map(normalizeWallItem);
+      layout.custom_walls = (preset.custom_walls || []).map(normalizeCustomWall);
+      layout.doors = (preset.doors || []).map(normalizeDoor);
       applyLayout();
+      selectObject(null);
     }
 
     function focusOnAsset() {

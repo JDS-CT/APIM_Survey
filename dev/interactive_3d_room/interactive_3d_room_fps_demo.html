@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Interactive 3D Room — First-Person Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+      background: #f5f7fb;
+      color: #1f2933;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      gap: 16px;
+      border-bottom: 1px solid rgba(31,41,51,0.12);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header nav a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    header nav a:hover {
+      text-decoration: underline;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) 1fr;
+      min-height: 0;
+    }
+    aside {
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+      align-content: start;
+      border-right: 1px solid rgba(31,41,51,0.08);
+      background: rgba(255,255,255,0.8);
+    }
+    aside h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    aside p {
+      margin: 0;
+      color: rgba(31,41,51,0.72);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    aside .controls {
+      display: grid;
+      gap: 8px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    input[type="file"] {
+      font: inherit;
+    }
+    button {
+      appearance: none;
+      font: inherit;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(31,41,51,0.16);
+      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(235,239,245,0.95));
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15,23,42,0.12);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .viewport {
+      position: relative;
+      background: radial-gradient(circle at top, rgba(180,200,230,0.32), transparent 55%), #dfe6f1;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      min-height: 0;
+    }
+    #rendererHost {
+      flex: 1 1 auto;
+      position: relative;
+    }
+    #rendererHost canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+    }
+    .overlay .card {
+      pointer-events: auto;
+      background: rgba(17,24,39,0.72);
+      color: #f8fafc;
+      padding: 18px 20px;
+      border-radius: 12px;
+      max-width: 320px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 40px rgba(15,23,42,0.35);
+    }
+    .overlay h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .overlay p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .info-box {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(31,41,51,0.12);
+      background: rgba(255,255,255,0.7);
+      font-size: 13px;
+      line-height: 1.5;
+      color: rgba(31,41,51,0.78);
+    }
+    .legend {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: rgba(31,41,51,0.7);
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(15,23,42,0.2);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <strong>3D Room Viewer — First-Person Prototype</strong>
+      <div style="font-size:13px;color:rgba(31,41,51,0.68);">Walk inside the imported room layout, experiment with the FreeCAD X3D asset, and preview placement in 3D.</div>
+    </div>
+    <nav>
+      <a href="../room_survey_min/room_survey_min_v1.html">2D Room Survey</a>
+      <a href="interactive_3d_room_v1.html">Orbit Viewer</a>
+    </nav>
+  </header>
+  <main>
+    <aside>
+      <div>
+        <h2>Workflow</h2>
+        <p>Import the JSON exported from the 2D survey, then use first-person controls to explore. The FreeCAD <em>dozenSidedStack</em> sample is included to prove we can load X3D assets.</p>
+      </div>
+      <div class="controls">
+        <label>Import 2D Layout JSON
+          <input id="layoutImport" type="file" accept="application/json" />
+        </label>
+        <button id="resetLayout">Reset to Default Room</button>
+        <button id="loadAsset">Load Sample X3D Asset</button>
+        <button id="focusAsset" disabled>Focus on Sample Asset</button>
+      </div>
+      <div class="controls">
+        <button id="enterWalk">Enter Walk Mode</button>
+        <button id="resetWalk">Reset Walk Position</button>
+      </div>
+      <div class="info-box" id="roomInfo"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:#d4d8e5"></span> Walls (default thickness 200&nbsp;mm)</span>
+        <span><span class="swatch" style="background:#b49a7a"></span> Custom walls</span>
+        <span><span class="swatch" style="background:#3b8d46"></span> Doors (2.1&nbsp;m tall)</span>
+        <span><span class="swatch" style="background:#2e6fba"></span> Floor items from survey</span>
+        <span><span class="swatch" style="background:#8c5dd8"></span> Loaded X3D asset</span>
+      </div>
+    </aside>
+    <section class="viewport">
+      <div id="rendererHost"></div>
+      <div class="overlay" id="walkOverlay">
+        <div class="card">
+          <h3>Click “Enter Walk Mode”</h3>
+          <p>Use <strong>WASD</strong> to move, <strong>mouse</strong> to look, and <strong>Space</strong>/<strong>Shift</strong> to move vertically. Press <strong>Esc</strong> to exit walk mode. Click the asset (when not walking) to drag it on the floor.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/PointerLockControls.js';
+    import { TransformControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/TransformControls.js';
+    import { X3DLoader } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/loaders/X3DLoader.js';
+
+    const mm2m = value => value / 1000;
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const toNumber = (value, fallback = 0) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    const ROOM_HEIGHT_MM = 2438.4; // 8 ft
+    const DEFAULT_WALL_THICKNESS_MM = 200;
+    const DOOR_DEFAULT_THICKNESS_MM = 80;
+    const DOOR_HEIGHT_MM = 2100;
+
+    const FLOOR_ITEM_META = {
+      floorBox: { label: 'Floor Box', wmm: 600, lmm: 600, color: 0x2e6fba, height: 0.5 },
+      microscope: { label: 'Microscope', wmm: 2200, lmm: 1800, color: 0x8c5dd8, height: 2.0 },
+      table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
+      pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 }
+    };
+
+    const layout = {
+      room: { Wmm: 6000, Lmm: 8000 },
+      floor_items: [],
+      wall_items: [],
+      custom_walls: [],
+      doors: []
+    };
+
+    const rendererHost = document.getElementById('rendererHost');
+    const walkOverlay = document.getElementById('walkOverlay');
+    const enterWalkBtn = document.getElementById('enterWalk');
+    const resetWalkBtn = document.getElementById('resetWalk');
+    const layoutImport = document.getElementById('layoutImport');
+    const resetLayoutBtn = document.getElementById('resetLayout');
+    const loadAssetBtn = document.getElementById('loadAsset');
+    const focusAssetBtn = document.getElementById('focusAsset');
+    const roomInfo = document.getElementById('roomInfo');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf1f4f9);
+
+    const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 100);
+    camera.position.set(0, 1.6, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = false;
+    rendererHost.appendChild(renderer.domElement);
+
+    const pointerControls = new PointerLockControls(camera, renderer.domElement);
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.setMode('translate');
+    transformControls.showY = false;
+    transformControls.setTranslationSnap(0.05);
+    scene.add(transformControls);
+    scene.add(pointerControls.getObject());
+
+    const ambient = new THREE.AmbientLight(0xf2f5ff, 0.8);
+    scene.add(ambient);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
+    keyLight.position.set(4, 6, 3);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xcad6ff, 0.25);
+    fillLight.position.set(-5, 3, -2);
+    scene.add(fillLight);
+
+    const floorGroup = new THREE.Group();
+    const wallGroup = new THREE.Group();
+    const doorGroup = new THREE.Group();
+    const itemGroup = new THREE.Group();
+    const assetAnchor = new THREE.Group();
+    assetAnchor.visible = false;
+    assetAnchor.name = 'SampleAssetAnchor';
+    scene.add(floorGroup);
+    scene.add(wallGroup);
+    scene.add(doorGroup);
+    scene.add(itemGroup);
+    scene.add(assetAnchor);
+
+    const selectable = [];
+    const clock = new THREE.Clock();
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const moveState = { forward: false, back: false, left: false, right: false, up: false, down: false };
+    let walkBounds = { minX: -3, maxX: 3, minZ: -4, maxZ: 4, minY: 0.1, maxY: 3.5 };
+    let assetLoaded = false;
+    let assetSize = new THREE.Vector3(1, 1, 1);
+    let selectedObject = null;
+
+    function updateRendererSize() {
+      const { clientWidth, clientHeight } = rendererHost;
+      renderer.setSize(clientWidth, clientHeight, false);
+      camera.aspect = clientWidth / Math.max(1, clientHeight);
+      camera.updateProjectionMatrix();
+    }
+
+    function baseWallDefinitions() {
+      const W = layout.room.Wmm;
+      const L = layout.room.Lmm;
+      const t = DEFAULT_WALL_THICKNESS_MM;
+      return [
+        { ref: 'base:1', label: 'Wall 1 (y=0)', start: { x: 0, y: 0 }, end: { x: W, y: 0 }, thickness: t },
+        { ref: 'base:2', label: 'Wall 2 (x=W)', start: { x: W, y: 0 }, end: { x: W, y: L }, thickness: t },
+        { ref: 'base:3', label: 'Wall 3 (y=L)', start: { x: W, y: L }, end: { x: 0, y: L }, thickness: t },
+        { ref: 'base:4', label: 'Wall 4 (x=0)', start: { x: 0, y: L }, end: { x: 0, y: 0 }, thickness: t }
+      ];
+    }
+
+    function enrichWallGeometry(wall) {
+      const dx = wall.end.x - wall.start.x;
+      const dy = wall.end.y - wall.start.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1e-6) return null;
+      const tangent = { x: dx / length, y: dy / length };
+      const normal = { x: -tangent.y, y: tangent.x };
+      return { ...wall, length, tangent, normal };
+    }
+
+    function getCustomWall(ref) {
+      const id = ref.split(':')[1];
+      return layout.custom_walls.find(w => String(w.id) === id);
+    }
+
+    function getWallGeometry(ref) {
+      if (ref === undefined || ref === null) return null;
+      let normalized = ref;
+      if (typeof normalized === 'number') normalized = `base:${normalized}`;
+      normalized = String(normalized);
+      if (/^\d$/.test(normalized)) normalized = `base:${normalized}`;
+      if (normalized.startsWith('base:')) {
+        const wall = baseWallDefinitions().find(w => w.ref === normalized);
+        return wall ? enrichWallGeometry(wall) : null;
+      }
+      if (normalized.startsWith('custom:')) {
+        const wall = getCustomWall(normalized);
+        if (!wall) return null;
+        return enrichWallGeometry({
+          ref: normalized,
+          label: wall.name || 'Custom Wall',
+          start: { x: toNumber(wall.x1, 0), y: toNumber(wall.y1, 0) },
+          end: { x: toNumber(wall.x2, 0), y: toNumber(wall.y2, 0) },
+          thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM) }
+        );
+      }
+      return null;
+    }
+
+    function pointAlongWall(geom, offsetMm) {
+      const distance = clamp(offsetMm, 0, geom.length);
+      return {
+        x: geom.start.x + geom.tangent.x * distance,
+        y: geom.start.y + geom.tangent.y * distance
+      };
+    }
+
+    function normalizeFloorItem(item) {
+      const type = item.type || 'floorBox';
+      const meta = FLOOR_ITEM_META[type] || FLOOR_ITEM_META.floorBox;
+      return {
+        ...item,
+        type,
+        id: item.id,
+        x: toNumber(item.x, layout.room.Wmm / 2),
+        y: toNumber(item.y, layout.room.Lmm / 2),
+        w: toNumber(item.w ?? item.size, meta.wmm),
+        l: toNumber(item.l ?? item.size, meta.lmm),
+        rotation: toNumber(item.rotation, 0)
+      };
+    }
+
+    function normalizeWallItem(item) {
+      let wallRef = item.wall;
+      if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+      if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+      return {
+        ...item,
+        wall: wallRef || 'base:1',
+        s: toNumber(item.s, 0),
+        h: toNumber(item.h, 0)
+      };
+    }
+
+    function normalizeCustomWall(wall, idx) {
+      return {
+        ...wall,
+        id: wall.id !== undefined ? String(wall.id) : `cw_${idx}`,
+        x1: toNumber(wall.x1, 0),
+        y1: toNumber(wall.y1, 0),
+        x2: toNumber(wall.x2, 0),
+        y2: toNumber(wall.y2, 0),
+        thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM),
+        name: wall.name
+      };
+    }
+
+    function normalizeDoor(door, idx) {
+      let wallRef = door.wall;
+      if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+      if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+      return {
+        ...door,
+        id: door.id !== undefined ? String(door.id) : `door_${idx}`,
+        wall: wallRef || 'base:1',
+        offset: toNumber(door.offset, 0),
+        width: toNumber(door.width, 900),
+        thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM)
+      };
+    }
+
+    function ensureLayoutIds() {
+      layout.custom_walls = (layout.custom_walls || []).map(normalizeCustomWall);
+      layout.doors = (layout.doors || []).map(normalizeDoor);
+      layout.floor_items = (layout.floor_items || []).map(normalizeFloorItem);
+      layout.wall_items = (layout.wall_items || []).map(normalizeWallItem);
+    }
+
+    function ingestLayout(data) {
+      if (data.room) {
+        layout.room.Wmm = toNumber(data.room.W ?? data.room.Wmm, layout.room.Wmm);
+        layout.room.Lmm = toNumber(data.room.L ?? data.room.Lmm, layout.room.Lmm);
+      }
+      if (Array.isArray(data.floor_items)) {
+        layout.floor_items = data.floor_items.map(normalizeFloorItem);
+      } else if (Array.isArray(data.items)) {
+        const floor = data.items.filter(it => it.type !== 'socket').map(normalizeFloorItem);
+        const wallItems = data.items.filter(it => it.type === 'socket').map(normalizeWallItem);
+        layout.floor_items = floor;
+        layout.wall_items = wallItems;
+      }
+      if (Array.isArray(data.wall_items)) {
+        layout.wall_items = data.wall_items.map(normalizeWallItem);
+      }
+      if (Array.isArray(data.custom_walls)) {
+        layout.custom_walls = data.custom_walls.map(normalizeCustomWall);
+      }
+      if (Array.isArray(data.doors)) {
+        layout.doors = data.doors.map(normalizeDoor);
+      }
+      ensureLayoutIds();
+      applyLayout();
+    }
+
+    function mmPointToWorld(xMm, yMm) {
+      const x = mm2m(xMm - layout.room.Wmm / 2);
+      const z = mm2m(yMm - layout.room.Lmm / 2);
+      return new THREE.Vector3(x, 0, z);
+    }
+
+    function clearGroup(group) {
+      for (let i = group.children.length - 1; i >= 0; i -= 1) {
+        const child = group.children[i];
+        group.remove(child);
+        if (child.geometry) child.geometry.dispose?.();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose?.());
+          else child.material.dispose?.();
+        }
+      }
+    }
+
+    function buildFloorAndBounds() {
+      clearGroup(floorGroup);
+      const floorW = mm2m(layout.room.Wmm);
+      const floorL = mm2m(layout.room.Lmm);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0xf1f3f9, roughness: 0.9, metalness: 0.05 });
+      const floorGeo = new THREE.PlaneGeometry(floorW, floorL, 1, 1);
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.position.set(0, 0, 0);
+      floorGroup.add(floorMesh);
+
+      const grid = new THREE.GridHelper(Math.max(floorW, floorL) + 2, Math.round(Math.max(floorW, floorL)));
+      grid.material.opacity = 0.25;
+      grid.material.transparent = true;
+      grid.position.y = 0.002;
+      floorGroup.add(grid);
+
+      const minX = -floorW / 2 + 0.25;
+      const maxX = floorW / 2 - 0.25;
+      const minZ = -floorL / 2 + 0.25;
+      const maxZ = floorL / 2 - 0.25;
+      walkBounds = { minX, maxX, minZ, maxZ, minY: 0.1, maxY: mm2m(ROOM_HEIGHT_MM) - 0.2 };
+    }
+
+    function buildWalls() {
+      clearGroup(wallGroup);
+      const height = mm2m(ROOM_HEIGHT_MM);
+
+      const defaultMat = new THREE.MeshStandardMaterial({ color: 0xd4d8e5, roughness: 0.55, metalness: 0.05 });
+      baseWallDefinitions().forEach(def => {
+        const geom = enrichWallGeometry(def);
+        if (!geom) return;
+        const thickness = mm2m(geom.thickness || DEFAULT_WALL_THICKNESS_MM);
+        const length = mm2m(geom.length);
+        const box = new THREE.BoxGeometry(length, height, thickness);
+        const mesh = new THREE.Mesh(box, defaultMat.clone());
+        const centerMm = pointAlongWall(geom, geom.length / 2);
+        const offsetMm = {
+          x: centerMm.x + geom.normal.x * (geom.thickness / 2),
+          y: centerMm.y + geom.normal.y * (geom.thickness / 2)
+        };
+        const world = mmPointToWorld(offsetMm.x, offsetMm.y);
+        mesh.position.set(world.x, height / 2, world.z);
+        const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+        mesh.rotation.y = -angle;
+        wallGroup.add(mesh);
+      });
+
+      const customMat = new THREE.MeshStandardMaterial({ color: 0xb49a7a, roughness: 0.6, metalness: 0.08 });
+      (layout.custom_walls || []).forEach(def => {
+        const geom = getWallGeometry(`custom:${def.id}`);
+        if (!geom) return;
+        const thickness = mm2m(geom.thickness || DEFAULT_WALL_THICKNESS_MM);
+        const length = mm2m(geom.length);
+        const box = new THREE.BoxGeometry(length, height, thickness);
+        const mesh = new THREE.Mesh(box, customMat.clone());
+        const centerMm = pointAlongWall(geom, geom.length / 2);
+        const offsetMm = {
+          x: centerMm.x + geom.normal.x * (geom.thickness / 2),
+          y: centerMm.y + geom.normal.y * (geom.thickness / 2)
+        };
+        const world = mmPointToWorld(offsetMm.x, offsetMm.y);
+        mesh.position.set(world.x, height / 2, world.z);
+        const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+        mesh.rotation.y = -angle;
+        wallGroup.add(mesh);
+      });
+    }
+
+    function buildDoors() {
+      clearGroup(doorGroup);
+      const height = mm2m(DOOR_HEIGHT_MM);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x3b8d46, roughness: 0.4, metalness: 0.05 });
+      (layout.doors || []).forEach(door => {
+        const geom = getWallGeometry(door.wall);
+        if (!geom) return;
+        const widthMm = toNumber(door.width, 900);
+        const width = mm2m(widthMm);
+        const thicknessMm = toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM);
+        const thickness = mm2m(thicknessMm);
+        const box = new THREE.BoxGeometry(width, height, thickness);
+        const mesh = new THREE.Mesh(box, mat.clone());
+        const centerOffset = toNumber(door.offset, 0) + widthMm / 2;
+        const centerMm = pointAlongWall(geom, centerOffset);
+        const offsetMm = {
+          x: centerMm.x + geom.normal.x * (thicknessMm / 2),
+          y: centerMm.y + geom.normal.y * (thicknessMm / 2)
+        };
+        const world = mmPointToWorld(offsetMm.x, offsetMm.y);
+        mesh.position.set(world.x, height / 2, world.z);
+        const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+        mesh.rotation.y = -angle;
+        doorGroup.add(mesh);
+      });
+    }
+
+    function buildItems() {
+      clearGroup(itemGroup);
+      (layout.floor_items || []).forEach(item => {
+        const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
+        const w = mm2m(toNumber(item.w, meta.wmm));
+        const l = mm2m(toNumber(item.l, meta.lmm));
+        const h = meta.height ?? 1.0;
+        const geometry = new THREE.BoxGeometry(w, h, l);
+        const material = new THREE.MeshStandardMaterial({ color: meta.color, roughness: 0.45, metalness: 0.1 });
+        const mesh = new THREE.Mesh(geometry, material);
+        const world = mmPointToWorld(toNumber(item.x, layout.room.Wmm / 2), toNumber(item.y, layout.room.Lmm / 2));
+        mesh.position.set(world.x, h / 2, world.z);
+        const rot = THREE.MathUtils.degToRad(toNumber(item.rotation, 0));
+        if (rot) mesh.rotation.y = -rot;
+        itemGroup.add(mesh);
+      });
+    }
+
+    function updateRoomInfo() {
+      const Wm = (layout.room.Wmm / 1000).toFixed(2);
+      const Lm = (layout.room.Lmm / 1000).toFixed(2);
+      const heightM = (ROOM_HEIGHT_MM / 1000).toFixed(2);
+      const customCount = layout.custom_walls?.length ?? 0;
+      const doorCount = layout.doors?.length ?? 0;
+      const itemCount = layout.floor_items?.length ?? 0;
+      roomInfo.innerHTML = `Room: <strong>${Wm}m × ${Lm}m</strong> &middot; Height ${heightM}m<br>` +
+        `${customCount} custom wall${customCount === 1 ? '' : 's'}, ${doorCount} door${doorCount === 1 ? '' : 's'}, ${itemCount} floor item${itemCount === 1 ? '' : 's'}`;
+    }
+
+    function applyLayout() {
+      ensureLayoutIds();
+      buildFloorAndBounds();
+      buildWalls();
+      buildDoors();
+      buildItems();
+      repositionAssetIfNeeded();
+      updateRoomInfo();
+      resetWalkPosition();
+    }
+
+    function resetWalkPosition() {
+      const cameraHolder = pointerControls.getObject();
+      cameraHolder.position.set(walkBounds.minX + 0.6, 1.6, walkBounds.minZ + 1.2);
+      cameraHolder.rotation.set(0, 0, 0);
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+    }
+
+    function clampCamera() {
+      const pos = pointerControls.getObject().position;
+      pos.x = clamp(pos.x, walkBounds.minX, walkBounds.maxX);
+      pos.z = clamp(pos.z, walkBounds.minZ, walkBounds.maxZ);
+      pos.y = clamp(pos.y, walkBounds.minY, walkBounds.maxY);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      if (pointerControls.isLocked) {
+        const speed = 3.5;
+        velocity.x -= velocity.x * 10 * delta;
+        velocity.y -= velocity.y * 10 * delta;
+        velocity.z -= velocity.z * 10 * delta;
+
+        direction.z = Number(moveState.forward) - Number(moveState.back);
+        direction.x = Number(moveState.right) - Number(moveState.left);
+        direction.y = Number(moveState.up) - Number(moveState.down);
+        direction.normalize();
+
+        if (moveState.forward || moveState.back) velocity.z -= direction.z * speed * delta;
+        if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+        if (moveState.up || moveState.down) velocity.y -= direction.y * speed * delta;
+
+        pointerControls.moveRight(-velocity.x * delta);
+        pointerControls.moveForward(-velocity.z * delta);
+        pointerControls.getObject().position.y += velocity.y * delta;
+        clampCamera();
+      }
+      renderer.render(scene, camera);
+    }
+
+    function onKeyDown(event) {
+      switch (event.code) {
+        case 'KeyW': moveState.forward = true; break;
+        case 'KeyS': moveState.back = true; break;
+        case 'KeyA': moveState.left = true; break;
+        case 'KeyD': moveState.right = true; break;
+        case 'Space': moveState.up = true; break;
+        case 'ShiftLeft':
+        case 'ShiftRight': moveState.down = true; break;
+      }
+    }
+    function onKeyUp(event) {
+      switch (event.code) {
+        case 'KeyW': moveState.forward = false; break;
+        case 'KeyS': moveState.back = false; break;
+        case 'KeyA': moveState.left = false; break;
+        case 'KeyD': moveState.right = false; break;
+        case 'Space': moveState.up = false; break;
+        case 'ShiftLeft':
+        case 'ShiftRight': moveState.down = false; break;
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    pointerControls.addEventListener('lock', () => {
+      walkOverlay.classList.add('hidden');
+    });
+    pointerControls.addEventListener('unlock', () => {
+      walkOverlay.classList.remove('hidden');
+    });
+
+    transformControls.addEventListener('dragging-changed', event => {
+      if (event.value) {
+        pointerControls.unlock();
+      }
+    });
+
+    transformControls.addEventListener('objectChange', () => {
+      if (!selectedObject) return;
+      const baseY = selectedObject.userData.baseY ?? selectedObject.position.y;
+      selectedObject.position.y = baseY;
+      clampAsset(selectedObject);
+    });
+
+    function clampAsset(object) {
+      const radius = Math.max(assetSize.x, assetSize.z) / 2;
+      object.position.x = clamp(object.position.x, walkBounds.minX + radius, walkBounds.maxX - radius);
+      object.position.z = clamp(object.position.z, walkBounds.minZ + radius, walkBounds.maxZ - radius);
+    }
+
+    function repositionAssetIfNeeded() {
+      if (!assetLoaded) return;
+      const radius = Math.max(assetSize.x, assetSize.z) / 2;
+      const targetX = clamp(0, walkBounds.minX + radius, walkBounds.maxX - radius);
+      const targetZ = clamp(0, walkBounds.minZ + radius, walkBounds.maxZ - radius);
+      const baseY = assetAnchor.userData.baseY ?? assetAnchor.position.y;
+      assetAnchor.position.set(targetX, baseY, targetZ);
+      clampAsset(assetAnchor);
+    }
+
+    function selectObject(object) {
+      if (selectedObject === object) return;
+      selectedObject = object;
+      if (object) {
+        transformControls.attach(object);
+      } else {
+        transformControls.detach();
+      }
+      focusAssetBtn.disabled = !assetLoaded;
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function onPointerDown(event) {
+      if (pointerControls.isLocked) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(selectable, true);
+      if (hits.length) {
+        selectObject(assetAnchor);
+      } else {
+        selectObject(null);
+      }
+    }
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+    function resetLayout() {
+      layout.room.Wmm = 6000;
+      layout.room.Lmm = 8000;
+      layout.floor_items = [];
+      layout.wall_items = [];
+      layout.custom_walls = [];
+      layout.doors = [];
+      applyLayout();
+    }
+
+    function focusOnAsset() {
+      if (!assetLoaded) return;
+      pointerControls.unlock();
+      const radius = Math.max(assetSize.x, assetSize.z);
+      const target = assetAnchor.position.clone();
+      const offset = new THREE.Vector3(0, radius * 1.2 + assetSize.y, radius * 1.8 + 1.5);
+      const holder = pointerControls.getObject();
+      holder.position.copy(target.clone().add(offset));
+      holder.lookAt(target);
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+    }
+
+    enterWalkBtn.addEventListener('click', () => {
+      pointerControls.lock();
+    });
+
+    resetWalkBtn.addEventListener('click', () => {
+      pointerControls.unlock();
+      resetWalkPosition();
+    });
+
+    resetLayoutBtn.addEventListener('click', () => {
+      resetLayout();
+    });
+
+    focusAssetBtn.addEventListener('click', () => focusOnAsset());
+
+    layoutImport.addEventListener('change', event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          ingestLayout(data);
+        } catch (err) {
+          console.error('Failed to parse layout JSON', err);
+          alert('Unable to read layout file. Please export again from the 2D survey.');
+        } finally {
+          layoutImport.value = '';
+        }
+      };
+      reader.onerror = err => {
+        console.error('Failed to load layout file', err);
+        alert('Unable to read layout file.');
+        layoutImport.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    loadAssetBtn.addEventListener('click', () => {
+      loadSampleAsset();
+    });
+
+    const loader = new X3DLoader();
+
+    function loadSampleAsset() {
+      loadAssetBtn.disabled = true;
+      loader.load(
+        '../../resources/testObjects/dozenSidedStack/dozenSidedStack-Body.x3d',
+        object => {
+          const bbox = new THREE.Box3().setFromObject(object);
+          const center = new THREE.Vector3();
+          const size = new THREE.Vector3();
+          bbox.getCenter(center);
+          bbox.getSize(size);
+          object.position.sub(center);
+          const scale = 0.001; // FreeCAD export uses millimeters
+          object.scale.setScalar(scale);
+          assetSize = size.clone().multiplyScalar(scale);
+          assetAnchor.clear();
+          assetAnchor.add(object);
+          assetAnchor.visible = true;
+          const baseY = assetSize.y / 2;
+          assetAnchor.position.set(0, baseY, 0);
+          assetAnchor.userData.baseY = baseY;
+          selectable.splice(0, selectable.length, assetAnchor);
+          assetLoaded = true;
+          selectObject(assetAnchor);
+          loadAssetBtn.disabled = false;
+          loadAssetBtn.textContent = 'Reload Sample X3D Asset';
+          repositionAssetIfNeeded();
+        },
+        undefined,
+        error => {
+          console.error('Failed to load X3D asset', error);
+          alert('Unable to load the sample X3D file. See console for details.');
+          loadAssetBtn.disabled = false;
+        }
+      );
+    }
+
+    function onWindowResize() {
+      updateRendererSize();
+    }
+
+    window.addEventListener('resize', onWindowResize);
+
+    resetLayout();
+    updateRendererSize();
+    animate();
+  </script>
+</body>
+</html>

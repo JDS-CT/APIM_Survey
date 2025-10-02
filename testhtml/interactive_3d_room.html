@@ -1,0 +1,189 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Interactive 3D Room (X3DOM) — Width/Length + Triangle XY</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://www.x3dom.org/release/x3dom.css">
+  <script src="https://www.x3dom.org/release/x3dom.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; font: 14px/1.4 system-ui; }
+    header { grid-column: 1 / -1; padding: 8px 12px; border-bottom: 1px solid #eee; }
+    aside { padding: 12px; border-right: 1px solid #eee; display: grid; gap: 8px; align-content: start; }
+    main { position: relative; }
+    x3d { width: 100%; height: calc(100vh - 48px); }
+    label { display: flex; justify-content: space-between; gap: 8px; }
+    input[type="number"] { width: 7em; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .note { font-size: 12px; color: #555; }
+    .btn { padding: 6px 10px; border: 1px solid #444; background: #f0f0f0; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Interactive 3D Room</strong> — inputs on the left. Y-up (X3D), ground plane is X–Z. Height is fixed to 8&nbsp;ft (2.4384&nbsp;m).
+  </header>
+  <aside>
+    <div class="row"><strong>Units:</strong> millimeters for inputs; converted to meters in 3D.</div>
+    <label>Room Width (X, mm) <input id="Wmm" type="number" min="1000" value="6000" step="100"></label>
+    <label>Room Length (Y, mm) <input id="Lmm" type="number" min="1000" value="8000" step="100"></label>
+    <div class="note">Height is fixed to 8 ft = 2438.4 mm.</div>
+    <hr>
+    <label>Triangle X (mm) <input id="Txmm" type="number" min="0" value="3000" step="50"></label>
+    <label>Triangle Y (mm) <input id="Tymm" type="number" min="0" value="3000" step="50"></label>
+    <div class="row">
+      <button class="btn" id="apply">Apply</button>
+      <button class="btn" id="home">Home View</button>
+    </div>
+    <div class="note">Triangle is a flat marker on the floor. (X, Y) here maps to (X, Z) in the 3D scene.</div>
+  </aside>
+  <main>
+    <x3d id="viewer" showStat="false" showLog="false">
+      <Scene>
+        <Background skyColor="0.98 0.98 0.98"></Background>
+        <NavigationInfo type='"EXAMINE","ANY"' headlight="true"></NavigationInfo>
+        <Viewpoint id="vp" description="Home" position="4 2 4" orientation="0 1 0 0"></Viewpoint>
+
+        <!-- Room wireframe -->
+        <Transform id="roomTf">
+          <Shape>
+            <Appearance><Material emissiveColor="0.1 0.1 0.1"></Material></Appearance>
+            <IndexedLineSet id="roomEdges" coordIndex="">
+              <Coordinate id="roomCoords" point=""></Coordinate>
+            </IndexedLineSet>
+          </Shape>
+        </Transform>
+
+        <!-- Floor grid (1m spacing, auto-extended around room size) -->
+        <Transform id="gridTf">
+          <Shape>
+            <Appearance><Material emissiveColor="0.85 0.85 0.85"></Material></Appearance>
+            <IndexedLineSet id="gridLines" coordIndex=""></IndexedLineSet>
+          </Shape>
+        </Transform>
+
+        <!-- Triangle marker (flat on floor Y=0) -->
+        <Transform id="triTf" translation="0 0 0">
+          <Shape>
+            <Appearance><Material diffuseColor="0.2 0.5 0.95" transparency="0.2"></Material></Appearance>
+            <IndexedFaceSet coordIndex="0 1 2 -1">
+              <Coordinate id="triCoords" point="-0.2 0 0  0.2 0 0  0 0 0.3"></Coordinate>
+            </IndexedFaceSet>
+          </Shape>
+        </Transform>
+      </Scene>
+    </x3d>
+  </main>
+
+<script>
+const mm2m = v => v / 1000.0;
+const FT8_MM = 2438.4; // 8 feet
+const Hm = mm2m(FT8_MM);
+
+const Wmm = document.getElementById('Wmm');
+const Lmm = document.getElementById('Lmm');
+const Txmm = document.getElementById('Txmm');
+const Tymm = document.getElementById('Tymm');
+const applyBtn = document.getElementById('apply');
+const homeBtn = document.getElementById('home');
+
+const vp = document.getElementById('vp');
+const roomCoords = document.getElementById('roomCoords');
+const roomEdges = document.getElementById('roomEdges');
+const gridLines = document.getElementById('gridLines');
+const triTf = document.getElementById('triTf');
+const triCoords = document.getElementById('triCoords');
+
+function buildRoomEdges(Wm, Lm, Hm) {
+  // 8 corners of a box aligned to axes, with floor origin at (0,0,0)
+  // X right, Y up, Z forward
+  const pts = [
+    // bottom rectangle (Y=0): (0,0,0),(W,0,0),(W,0,L),(0,0,L)
+    [0,0,0], [Wm,0,0], [Wm,0,Lm], [0,0,Lm],
+    // top rectangle (Y=H)
+    [0,Hm,0], [Wm,Hm,0], [Wm,Hm,Lm], [0,Hm,Lm]
+  ];
+  const pstr = pts.map(p => p.join(' ')).join(' ');
+  roomCoords.setAttribute('point', pstr);
+  // Edges as pairs: bottom rectangle, top rectangle, vertical pillars
+  const idx = [
+    0,1,-1, 1,2,-1, 2,3,-1, 3,0,-1,   // bottom
+    4,5,-1, 5,6,-1, 6,7,-1, 7,4,-1,   // top
+    0,4,-1, 1,5,-1, 2,6,-1, 3,7,-1    // pillars
+  ].join(' ');
+  roomEdges.setAttribute('coordIndex', idx);
+}
+
+function buildGrid(Wm, Lm) {
+  const spanX = Math.max(1, Math.ceil(Wm));
+  const spanZ = Math.max(1, Math.ceil(Lm));
+  const lines = [];
+  // vertical lines along X (vary Z), at 1m steps
+  for (let x = 0; x <= spanX; x += 1) {
+    lines.push(`${x} 0 0 ${x} 0 ${spanZ} -1`);
+  }
+  // horizontal lines along Z (vary X)
+  for (let z = 0; z <= spanZ; z += 1) {
+    lines.push(`0 0 ${z} ${spanX} 0 ${z} -1`);
+  }
+  gridLines.setAttribute('coordIndex', '0 1 -1'); // dummy; we will set points below
+  // Flatten points sequence for all lines; we need to provide a Coordinate child for IndexedLineSet
+  // X3DOM allows Coordinate inside IndexedLineSet OR direct 'coord' attribute; we'll build a Coordinate child dynamically.
+  // Here we rebuild the entire IndexedLineSet with both coordIndex and Coordinate points.
+  const coords = [];
+  const indices = [];
+  let idx = 0;
+  function addLine(a,b) {
+    coords.push(a, b);
+    indices.push(idx, idx+1, -1);
+    idx += 2;
+  }
+  for (let x=0; x<=spanX; x+=1) addLine([x,0,0],[x,0,spanZ]);
+  for (let z=0; z<=spanZ; z+=1) addLine([0,0,z],[spanX,0,z]);
+  const coordEl = document.createElement('Coordinate');
+  coordEl.setAttribute('point', coords.map(p=>p.join(' ')).join(' '));
+  // Clear children then append new Coordinate
+  while (gridLines.firstChild) gridLines.removeChild(gridLines.firstChild);
+  gridLines.appendChild(coordEl);
+  gridLines.setAttribute('coordIndex', indices.join(' '));
+}
+
+function updateTriangle(xm, zm) {
+  // Place the triangle's local origin at (xm, 0, zm). Keep its local geometry a small marker.
+  triTf.setAttribute('translation', `${xm} 0 ${zm}`);
+  // Optionally scale triangle with room size (keep visible)
+  const s = Math.max(0.2, Math.min(1.0, Math.min(xm, zm, 1.0) * 0.05));
+  // Keep fixed size for now: defined in triCoords
+}
+
+function fitView(Wm, Lm, Hm) {
+  // Position camera diagonally above the room center
+  const cx = Wm/2, cy = Hm*0.8 + Math.max(Wm, Lm)*0.3, cz = Lm*1.1;
+  vp.setAttribute('position', `${cx} ${cy} ${cz}`);
+  vp.setAttribute('orientation', `0 1 0 0`);
+  // Let the browser recompute; no need to call resetView
+}
+
+function apply() {
+  const Wm = mm2m(Number(Wmm.value||0));
+  const Lm = mm2m(Number(Lmm.value||0));
+  const xm = mm2m(Number(Txmm.value||0));
+  const zm = mm2m(Number(Tymm.value||0));
+
+  buildRoomEdges(Wm, Lm, Hm);
+  buildGrid(Wm, Lm);
+  updateTriangle(xm, zm);
+  fitView(Wm, Lm, Hm);
+}
+
+// Buttons
+applyBtn.addEventListener('click', apply);
+homeBtn.addEventListener('click', () => {
+  fitView(mm2m(Number(Wmm.value||0)), mm2m(Number(Lmm.value||0)), Hm);
+});
+
+// Initialize
+apply();
+</script>
+</body>
+</html>

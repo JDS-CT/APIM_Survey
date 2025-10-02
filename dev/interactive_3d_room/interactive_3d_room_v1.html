@@ -448,6 +448,29 @@ async function loadLayoutRemote() {
   }
 }
 
+function coerceLayoutPayload(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.layout && typeof raw.layout === 'object') return raw.layout;
+  return raw;
+}
+
+function parseLayoutText(rawText) {
+  if (typeof rawText !== 'string') {
+    throw new Error('layout-file-empty');
+  }
+  const sanitized = rawText.replace(/^\uFEFF/, '').trim();
+  if (!sanitized) {
+    throw new Error('layout-file-empty');
+  }
+  try {
+    return coerceLayoutPayload(JSON.parse(sanitized));
+  } catch (err) {
+    const error = new Error('layout-file-invalid');
+    error.cause = err;
+    throw error;
+  }
+}
+
 function snapshotLayout() {
   const triangle = layout.triangle || { x: 0, y: 0 };
   return {
@@ -877,23 +900,34 @@ homeBtn.addEventListener('click', () => {
   showStatus('Camera reset to home view.', 'info');
 });
 
-importInput.addEventListener('change', evt => {
-  const file = evt.target.files && evt.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
+if (importInput) {
+  importInput.addEventListener('change', async evt => {
     try {
-      const data = JSON.parse(e.target.result);
+      const file = evt.target.files && evt.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const data = parseLayoutText(text);
+      if (!data) {
+        throw new Error('layout-file-empty');
+      }
       ingestLayout(data);
       apply({ skipStatus: true });
       showStatus('Layout imported from file.', 'success');
     } catch (err) {
       console.error('Failed to load layout', err);
-      alert('Unable to parse layout file. Please ensure it is a valid export from the 2D survey.');
+      const code = err && err.message;
+      const message = code === 'layout-file-empty'
+        ? 'The selected file was empty.'
+        : 'Unable to parse layout file. Please ensure it is a valid export from the 2D survey.';
+      showStatus(message, 'error');
+      alert(message);
+    } finally {
+      if (importInput) {
+        importInput.value = '';
+      }
     }
-  };
-  reader.readAsText(file);
-});
+  });
+}
 
 if (saveBtn) {
   saveBtn.addEventListener('click', async () => {

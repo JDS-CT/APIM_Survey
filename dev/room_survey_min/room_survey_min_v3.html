@@ -1,0 +1,347 @@
+<html lang="en">
+<head>
+  <!-- Prototype version 3 (placeholder copy ready for alternative experiments) -->
+  <meta charset="utf-8" />
+  <title>Room Survey (SVG Drag + Snap) — v3 Draft</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font: 14px/1.4 system-ui; margin: 16px; }
+    .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    label { display: inline-flex; align-items: center; gap: 6px; }
+    input[type="number"] { width: 7em; }
+    #stage { border: 1px solid #ccc; background: #fafafa; }
+    .btn { padding: 6px 10px; border: 1px solid #444; background: #f0f0f0; cursor: pointer; }
+    .legend { margin-top: 8px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    .hud { font: 12px/1.2 system-ui; color: #333; }
+    .toggle { display: inline-flex; align-items: center; gap: 6px; }
+  </style>
+</head>
+<body>
+<h1>Room Survey (Top-Down)</h1>
+
+<div class="row">
+  <label>Width W (mm) <input id="W" type="number" value="6000" min="1000"></label>
+  <label>Length L (mm) <input id="L" type="number" value="8000" min="1000"></label>
+  <label>Snap (mm) <input id="snap" type="number" value="100" min="10" step="10" title="Grid snap step in millimeters"></label>
+  <label class="toggle"><input id="imperial" type="checkbox"> Show imperial (in) & use 150&nbsp;mm snap</label>
+  <button class="btn" id="apply">Apply</button>
+</div>
+
+<svg id="stage" width="900" height="640" viewBox="0 0 900 640">
+  <!-- Room rectangle (scaled to fit) -->
+  <g id="roomGroup">
+    <rect id="roomRect" x="50" y="50" width="700" height="500" fill="none" stroke="#333" stroke-width="2"/>
+    <!-- Origin marker (rear-left corner) -->
+    <circle id="origin" cx="50" cy="550" r="5" fill="#d33"></circle>
+    <text x="60" y="545" font-size="12">Origin (0,0)</text>
+    <!-- grid group -->
+    <g id="grid"></g>
+  </g>
+
+  <!-- Draggable items -->
+  <g id="items"></g>
+</svg>
+
+<div class="row">
+  <label>
+    Add:
+    <select id="addType">
+      <option value="floorBox">Floor Box</option>
+      <option value="socket">Wall Socket</option>
+    </select>
+  </label>
+  <label>
+    Wall for socket:
+    <select id="wallSel">
+      <option value="1">Wall 1 (y=0)</option>
+      <option value="2">Wall 2 (x=W)</option>
+      <option value="3">Wall 3 (y=L)</option>
+      <option value="4">Wall 4 (x=0)</option>
+    </select>
+  </label>
+  <button class="btn" id="add">Add</button>
+  <button class="btn" id="export">Export JSON</button>
+  <span class="hud" id="hud"></span>
+</div>
+
+<div class="legend">
+  <span class="dot" style="background:#1e88e5"></span>Floor Box
+  &nbsp;&nbsp;
+  <span class="dot" style="background:#f9a825"></span>Socket
+</div>
+
+<script>
+const Winput = document.getElementById('W');
+const Linput = document.getElementById('L');
+const snapInput = document.getElementById('snap');
+const imperialChk = document.getElementById('imperial');
+const applyBtn = document.getElementById('apply');
+const addBtn = document.getElementById('add');
+const exportBtn = document.getElementById('export');
+const wallSel = document.getElementById('wallSel');
+const addType = document.getElementById('addType');
+const itemsG = document.getElementById('items');
+const roomRect = document.getElementById('roomRect');
+const originDot = document.getElementById('origin');
+const gridG = document.getElementById('grid');
+const hud = document.getElementById('hud');
+
+let state = {
+  Wmm: 6000, Lmm: 8000,
+  scale: 1, // px per mm
+  snap: 100,
+  imperial: false,
+  items: [] // {type, x, y, size?, wall?, s?, h?} in mm
+};
+
+function mmToIn(mm) { return mm / 25.4; }
+function fmtLen(mm) {
+  if (!state.imperial) return `${Math.round(mm)} mm`;
+  const inches = mmToIn(mm);
+  const step = 150; // when imperial ON, present/behave as 150 mm
+  return `${Math.round(mm)} mm (${inches.toFixed(2)} in)`;
+}
+
+function recomputeScale() {
+  const maxWpx = 800, maxLpx = 520;
+  const sx = maxWpx / state.Wmm;
+  const sy = maxLpx / state.Lmm;
+  state.scale = Math.min(sx, sy);
+  const wpx = state.Wmm * state.scale;
+  const lpx = state.Lmm * state.scale;
+  roomRect.setAttribute('width', wpx);
+  roomRect.setAttribute('height', lpx);
+  // bottom-left at (50,570)
+  const x0 = 50, y0 = 570 - lpx;
+  roomRect.setAttribute('x', x0);
+  roomRect.setAttribute('y', y0);
+  originDot.setAttribute('cx', x0);
+  originDot.setAttribute('cy', 570);
+  drawGrid();
+}
+recomputeScale();
+
+function drawGrid() {
+  gridG.innerHTML = '';
+  const step = state.snap;
+  const x0 = Number(roomRect.getAttribute('x'));
+  const y0 = Number(roomRect.getAttribute('y'));
+  const wpx = Number(roomRect.getAttribute('width'));
+  const lpx = Number(roomRect.getAttribute('height'));
+  const s = state.scale * step;
+  // verticals
+  for (let xmm=0; xmm<=state.Wmm; xmm+=step) {
+    const x = x0 + xmm*state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x); line.setAttribute('y1', y0);
+    line.setAttribute('x2', x); line.setAttribute('y2', y0+lpx);
+    line.setAttribute('stroke', '#ddd'); line.setAttribute('stroke-width', 1);
+    gridG.appendChild(line);
+  }
+  // horizontals
+  for (let ymm=0; ymm<=state.Lmm; ymm+=step) {
+    const y = y0 + (state.Lmm - ymm) * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x0); line.setAttribute('y1', y);
+    line.setAttribute('x2', x0+wpx); line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#eee'); line.setAttribute('stroke-width', 1);
+    gridG.appendChild(line);
+  }
+}
+
+applyBtn.onclick = () => {
+  state.Wmm = Math.max(1000, Number(Winput.value||0));
+  state.Lmm = Math.max(1000, Number(Linput.value||0));
+  const impOn = imperialChk.checked;
+  state.imperial = impOn;
+  // when imperial ON, snap is 150 mm; else use the input
+  state.snap = impOn ? 150 : Math.max(10, Number(snapInput.value||100));
+  if (!impOn) snapInput.value = state.snap;
+  recomputeScale();
+  render();
+};
+
+imperialChk.onchange = () => {
+  state.imperial = imperialChk.checked;
+  state.snap = state.imperial ? 150 : Math.max(10, Number(snapInput.value||100));
+  if (!state.imperial) snapInput.value = state.snap;
+  drawGrid(); render();
+};
+
+snapInput.onchange = () => {
+  if (state.imperial) return; // locked to 150 when imperial ON
+  state.snap = Math.max(10, Number(snapInput.value||100));
+  drawGrid(); render();
+};
+
+function addItem() {
+  if (addType.value === 'floorBox') {
+    state.items.push({ type:'floorBox', x: snap(state.Wmm/2), y: snap(state.Lmm/2), size: snap(600) });
+  } else {
+    const wall = Number(wallSel.value);
+    state.items.push({ type:'socket', wall, s: snap(500), h: snap(300) });
+  }
+  render();
+}
+
+function snap(vmm) {
+  const s = state.snap;
+  return Math.round(vmm / s) * s;
+}
+
+function mmToPx(xmm, ymm) {
+  const x0 = Number(roomRect.getAttribute('x'));
+  const y0 = Number(roomRect.getAttribute('y'));
+  const px = x0 + xmm * state.scale;
+  const py = y0 + (state.Lmm - ymm) * state.scale; // Y up in mm, down in px
+  return [px, py];
+}
+
+function wallShToXY(wall, s, h) {
+  const W = state.Wmm, L = state.Lmm;
+  let xmm=0, ymm=0;
+  if (wall===1) { xmm = s; ymm = 0; }
+  else if (wall===2) { xmm = W; ymm = s; }
+  else if (wall===3) { xmm = W - s; ymm = L; }
+  else if (wall===4) { xmm = 0; ymm = L - s; }
+  const [px, py] = mmToPx(xmm, ymm);
+  const [px2, py2] = mmToPx(xmm, Math.min(L, Math.max(0, h))); // vertical marker
+  return {base:[px, py], tip:[px2, py2]};
+}
+
+function render() {
+  itemsG.innerHTML = '';
+  for (let i=0;i<state.items.length;i++) {
+    const it = state.items[i];
+    if (it.type==='floorBox') {
+      const sizePx = (it.size||600) * state.scale;
+      const [px, py] = mmToPx(it.x, it.y);
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', px - sizePx/2);
+      rect.setAttribute('y', py - sizePx/2);
+      rect.setAttribute('width', sizePx);
+      rect.setAttribute('height', sizePx);
+      rect.setAttribute('fill', '#1e88e5');
+      rect.setAttribute('fill-opacity', '0.4');
+      rect.setAttribute('stroke', '#1e88e5');
+      rect.setAttribute('cursor', 'move');
+      rect.dataset.index = i;
+      rect.addEventListener('pointerdown', dragStart);
+      itemsG.appendChild(rect);
+    } else if (it.type==='socket') {
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      const wh = 16;
+      const {base, tip} = wallShToXY(it.wall, it.s, it.h);
+      const mk = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      mk.setAttribute('x', base[0]-wh/2);
+      mk.setAttribute('y', base[1]-wh/2);
+      mk.setAttribute('width', wh);
+      mk.setAttribute('height', wh);
+      mk.setAttribute('fill', '#f9a825');
+      mk.setAttribute('stroke', '#aa7a00');
+      mk.setAttribute('cursor', 'ew-resize');
+      mk.dataset.index = i;
+      mk.addEventListener('pointerdown', dragStartSocketS);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', base[0]);
+      line.setAttribute('y1', base[1]);
+      line.setAttribute('x2', tip[0]);
+      line.setAttribute('y2', tip[1]);
+      line.setAttribute('stroke', '#f9a825');
+      line.setAttribute('stroke-width', 2);
+      line.setAttribute('cursor', 'ns-resize');
+      line.dataset.index = i;
+      line.addEventListener('pointerdown', dragStartSocketH);
+      g.appendChild(line);
+      g.appendChild(mk);
+      itemsG.appendChild(g);
+    }
+  }
+  hud.textContent = `Snap: ${state.snap} mm` + (state.imperial ? ` (${mmToIn(state.snap).toFixed(2)} in)` : '');
+}
+
+// Dragging with snap
+let drag = null;
+function svgPoint(evt) {
+  const svg = document.getElementById('stage');
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  const ctm = svg.getScreenCTM().inverse();
+  return pt.matrixTransform(ctm);
+}
+
+function dragStart(evt) {
+  const i = Number(evt.target.dataset.index);
+  drag = { kind:'floor', index:i, start: svgPoint(evt) };
+  evt.target.setPointerCapture(evt.pointerId);
+  evt.preventDefault();
+}
+function dragStartSocketS(evt) {
+  const i = Number(evt.target.dataset.index);
+  drag = { kind:'socketS', index:i, start: svgPoint(evt) };
+  evt.target.setPointerCapture(evt.pointerId);
+  evt.preventDefault();
+}
+function dragStartSocketH(evt) {
+  const i = Number(evt.target.dataset.index);
+  drag = { kind:'socketH', index:i, start: svgPoint(evt) };
+  evt.target.setPointerCapture(evt.pointerId);
+  evt.preventDefault();
+}
+document.addEventListener('pointermove', evt => {
+  if (!drag) return;
+  const p = svgPoint(evt);
+  const it = state.items[drag.index];
+  if (drag.kind==='floor') {
+    const dx = (p.x - drag.start.x) / state.scale;
+    const dy = (drag.start.y - p.y) / state.scale; // invert
+    it.x = snap(Math.min(state.Wmm, Math.max(0, (it.x || 0) + dx)));
+    it.y = snap(Math.min(state.Lmm, Math.max(0, (it.y || 0) + dy)));
+    drag.start = p;
+    hud.textContent = `Floor Box @ (${fmtLen(it.x)}, ${fmtLen(it.y)}) | Snap ${state.snap} mm` + (state.imperial ? ` (${mmToIn(state.snap).toFixed(2)} in)` : '');
+  } else if (drag.kind==='socketS') {
+    // walls 1/3 vary along X; 2/4 vary along Y
+    if (it.wall===1 || it.wall===3) {
+      const xmm_new = (p.x - Number(roomRect.getAttribute('x'))) / state.scale;
+      const xmm = Math.min(state.Wmm, Math.max(0, xmm_new));
+      it.s = snap(it.wall===1 ? xmm : (state.Wmm - xmm));
+    } else {
+      const ymm_new = state.Lmm - ((p.y - Number(roomRect.getAttribute('y'))) / state.scale);
+      const ymm = Math.min(state.Lmm, Math.max(0, ymm_new));
+      it.s = snap(it.wall===2 ? ymm : (state.Lmm - ymm));
+    }
+    hud.textContent = `Socket s=${fmtLen(it.s)}, h=${fmtLen(it.h)} (wall ${it.wall}) | Snap ${state.snap} mm` + (state.imperial ? ` (${mmToIn(state.snap).toFixed(2)} in)` : '');
+  } else if (drag.kind==='socketH') {
+    const ymm_new = state.Lmm - ((p.y - Number(roomRect.getAttribute('y'))) / state.scale);
+    it.h = snap(Math.min(state.Lmm, Math.max(0, ymm_new)));
+    hud.textContent = `Socket s=${fmtLen(it.s)}, h=${fmtLen(it.h)} (wall ${it.wall}) | Snap ${state.snap} mm` + (state.imperial ? ` (${mmToIn(state.snap).toFixed(2)} in)` : '');
+  }
+  render();
+});
+document.addEventListener('pointerup', () => drag=null);
+
+addBtn.onclick = addItem;
+
+exportBtn.onclick = () => {
+  const out = {
+    units: "mm",
+    room: { W: state.Wmm, L: state.Lmm },
+    snap_mm: state.snap,
+    imperial_display: state.imperial,
+    items: state.items
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "room_survey.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// initial render
+applyBtn.click();
+</script>
+</body>
+</html>

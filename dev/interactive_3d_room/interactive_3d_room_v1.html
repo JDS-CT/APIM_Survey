@@ -1,98 +1,242 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <!-- Prototype version 1 of the interactive 3D room viewer -->
   <meta charset="utf-8" />
-  <title>Interactive 3D Room (X3DOM) — Width/Length + Triangle XY — v1</title>
+  <title>Interactive 3D Room (Orbit Viewer)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://www.x3dom.org/release/x3dom.css">
+  <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
   <script src="https://www.x3dom.org/release/x3dom.js"></script>
   <style>
-    html, body { height: 100%; margin: 0; }
-    body { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto 1fr; font: 14px/1.4 system-ui; }
-    header { grid-column: 1 / -1; padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    header nav a { color: #1976d2; text-decoration: none; font-weight: 600; }
-    header nav a:hover { text-decoration: underline; }
-    aside { padding: 12px; border-right: 1px solid #eee; display: grid; gap: 8px; align-content: start; }
-    main { position: relative; }
-    x3d { width: 100%; height: calc(100vh - 48px); }
-    label { display: flex; justify-content: space-between; gap: 8px; }
-    input[type="number"] { width: 7em; }
-    .row { display: flex; gap: 8px; align-items: center; }
-    .note { font-size: 12px; color: #555; }
-    .btn { padding: 6px 10px; border: 1px solid #444; background: #f0f0f0; cursor: pointer; }
-    .file-label { flex-direction: column; align-items: flex-start; gap: 4px; font-weight: 600; }
-    .file-label input { width: 100%; }
+    :root {
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--room-ui-bg);
+      color: var(--room-ui-text);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      gap: 16px;
+      border-bottom: 1px solid var(--room-ui-border);
+      background: var(--room-ui-surface);
+      backdrop-filter: blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--room-ui-muted-strong);
+      margin-top: 2px;
+    }
+    nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      color: var(--room-ui-link);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .nav-link:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .nav-link.active {
+      background: rgba(37, 99, 235, 0.18);
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(280px, 340px) 1fr;
+      gap: 20px;
+      padding: 24px;
+      min-height: 0;
+    }
+    aside {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+    .panel {
+      background: var(--room-ui-surface);
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid var(--room-ui-border-soft);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 12px;
+    }
+    .panel hr {
+      border: none;
+      border-top: 1px solid var(--room-ui-border-soft);
+      margin: 12px -18px;
+    }
+    label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--room-ui-muted-strong);
+    }
+    input[type="number"] {
+      width: 7em;
+      font: inherit;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--room-ui-border);
+      background: rgba(255, 255, 255, 0.92);
+      color: inherit;
+    }
+    .file-label {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      font-weight: 600;
+    }
+    .file-label input {
+      width: 100%;
+      font: inherit;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--room-ui-border);
+      background: rgba(255, 255, 255, 0.92);
+      color: inherit;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .note {
+      font-size: 13px;
+      color: var(--room-ui-muted);
+    }
+    .btn {
+      appearance: none;
+      font: inherit;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--room-ui-button-border);
+      background: linear-gradient(180deg, var(--room-ui-button-bg-top), var(--room-ui-button-bg-bottom));
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px var(--room-ui-shadow);
+    }
+    .viewport {
+      background: var(--room-ui-viewport-bg);
+      border-radius: 18px;
+      border: 1px solid var(--room-ui-border-soft);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+      overflow: hidden;
+      display: flex;
+      min-height: 0;
+    }
+    x3d {
+      width: 100%;
+      height: 100%;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="title"><strong>Interactive 3D Room</strong> — inputs on the left. Y-up (X3D), ground plane is X–Z. Height is fixed to 8&nbsp;ft (2.4384&nbsp;m).</div>
+    <div>
+      <strong>Interactive 3D Room — Orbit Viewer</strong>
+      <div class="subtitle">Review walls, doors, and items from the exported survey before committing to the layout.</div>
+    </div>
     <nav>
-      <a href="../room_survey_min/room_survey_min_v1.html">Open 2D Layout</a>
-      <a href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
+      <a class="nav-link" href="../index.html">Home</a>
+      <a class="nav-link" href="../room_survey_min/room_survey_min_v1.html">2D Survey</a>
+      <a class="nav-link active" href="interactive_3d_room_v1.html">Orbit Viewer</a>
+      <a class="nav-link" href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
     </nav>
   </header>
-  <aside>
-    <div class="row"><strong>Units:</strong> millimeters for inputs; converted to meters in 3D.</div>
-    <label>Room Width (X, mm) <input id="Wmm" type="number" min="1000" value="6000" step="100"></label>
-    <label>Room Length (Y, mm) <input id="Lmm" type="number" min="1000" value="8000" step="100"></label>
-    <div class="note">Height is fixed to 8 ft = 2438.4 mm.</div>
-    <hr>
-    <label>Triangle X (mm) <input id="Txmm" type="number" min="0" value="3000" step="50"></label>
-    <label>Triangle Y (mm) <input id="Tymm" type="number" min="0" value="3000" step="50"></label>
-    <div class="row">
-      <button class="btn" id="apply">Apply</button>
-      <button class="btn" id="home">Home View</button>
-    </div>
-    <div class="note">Triangle is a flat marker on the floor. (X, Y) here maps to (X, Z) in the 3D scene.</div>
-    <hr>
-    <label class="file-label">Import 2D JSON <input id="import2d" type="file" accept="application/json"></label>
-    <div class="note">Load a layout exported from the 2D survey. Dimensions and items are populated automatically.</div>
-  </aside>
   <main>
-    <x3d id="viewer" showStat="false" showLog="false">
-      <Scene>
-        <Background skyColor="0.98 0.98 0.98"></Background>
-        <NavigationInfo type='"EXAMINE","ANY"' headlight="true"></NavigationInfo>
-        <Viewpoint id="vp" description="Home" position="4 2 4" orientation="0 1 0 0"></Viewpoint>
+    <aside>
+      <div class="panel">
+        <div class="row"><strong>Units:</strong> millimeters for inputs; converted to meters in 3D.</div>
+        <label>Room Width (X, mm) <input id="Wmm" type="number" min="1000" value="6000" step="100"></label>
+        <label>Room Length (Y, mm) <input id="Lmm" type="number" min="1000" value="8000" step="100"></label>
+        <div class="note">Height is fixed to 8 ft = 2438.4 mm.</div>
+        <hr>
+        <label>Triangle X (mm) <input id="Txmm" type="number" min="0" value="3000" step="50"></label>
+        <label>Triangle Y (mm) <input id="Tymm" type="number" min="0" value="3000" step="50"></label>
+        <div class="row">
+          <button class="btn" id="apply">Apply</button>
+          <button class="btn" id="home">Home View</button>
+        </div>
+        <div class="note">Triangle is a flat marker on the floor. (X, Y) maps to (X, Z) in the 3D scene.</div>
+        <hr>
+        <label class="file-label">Import 2D JSON <input id="import2d" type="file" accept="application/json"></label>
+        <div class="note">Load a layout exported from the 2D survey. Dimensions and items are populated automatically.</div>
+      </div>
+    </aside>
+    <section class="viewport">
+      <x3d id="viewer" showStat="false" showLog="false">
+        <Scene>
+          <Background skyColor="0.98 0.98 0.98"></Background>
+          <NavigationInfo type='"EXAMINE","ANY"' headlight="true"></NavigationInfo>
+          <Viewpoint id="vp" description="Home" position="4 2 4" orientation="0 1 0 0"></Viewpoint>
 
-        <!-- Room wireframe -->
-        <Transform id="roomTf">
-          <Shape>
-            <Appearance><Material emissiveColor="0.1 0.1 0.1"></Material></Appearance>
-            <IndexedLineSet id="roomEdges" coordIndex="">
-              <Coordinate id="roomCoords" point=""></Coordinate>
-            </IndexedLineSet>
-          </Shape>
-        </Transform>
+          <!-- Room wireframe -->
+          <Transform id="roomTf">
+            <Shape>
+              <Appearance><Material emissiveColor="0.1 0.1 0.1"></Material></Appearance>
+              <IndexedLineSet id="roomEdges" coordIndex="">
+                <Coordinate id="roomCoords" point=""></Coordinate>
+              </IndexedLineSet>
+            </Shape>
+          </Transform>
 
-        <!-- Floor grid (1m spacing, auto-extended around room size) -->
-        <Transform id="gridTf">
-          <Shape>
-            <Appearance><Material emissiveColor="0.85 0.85 0.85"></Material></Appearance>
-            <IndexedLineSet id="gridLines" coordIndex=""></IndexedLineSet>
-          </Shape>
-        </Transform>
+          <!-- Floor grid (1m spacing, auto-extended around room size) -->
+          <Transform id="gridTf">
+            <Shape>
+              <Appearance><Material emissiveColor="0.85 0.85 0.85"></Material></Appearance>
+              <IndexedLineSet id="gridLines" coordIndex=""></IndexedLineSet>
+            </Shape>
+          </Transform>
 
-        <!-- Triangle marker (flat on floor Y=0) -->
-        <Transform id="triTf" translation="0 0 0">
-          <Shape>
-            <Appearance><Material diffuseColor="0.2 0.5 0.95" transparency="0.2"></Material></Appearance>
-            <IndexedFaceSet coordIndex="0 1 2 -1">
-              <Coordinate id="triCoords" point="-0.2 0 0  0.2 0 0  0 0 0.3"></Coordinate>
-            </IndexedFaceSet>
-          </Shape>
-        </Transform>
+          <!-- Triangle marker (flat on floor Y=0) -->
+          <Transform id="triTf" translation="0 0 0">
+            <Shape>
+              <Appearance><Material diffuseColor="0.2 0.5 0.95" transparency="0.2"></Material></Appearance>
+              <IndexedFaceSet coordIndex="0 1 2 -1">
+                <Coordinate id="triCoords" point="-0.2 0 0  0.2 0 0  0 0 0.3"></Coordinate>
+              </IndexedFaceSet>
+            </Shape>
+          </Transform>
 
-        <!-- Extruded items (populated from 2D layout) -->
-        <Transform id="wallsRoot"></Transform>
-        <Transform id="doorsRoot"></Transform>
-        <Transform id="itemsRoot"></Transform>
-      </Scene>
-    </x3d>
+          <!-- Extruded items (populated from 2D layout) -->
+          <Transform id="wallsRoot"></Transform>
+          <Transform id="doorsRoot"></Transform>
+          <Transform id="itemsRoot"></Transform>
+        </Scene>
+      </x3d>
+    </section>
   </main>
 
-<script>
+  <script>
+
 const mm2m = v => v / 1000.0;
 const FT8_MM = 2438.4; // 8 feet
 const Hm = mm2m(FT8_MM);
@@ -125,6 +269,22 @@ const FLOOR_ITEM_META = {
   table: { wmm: 1800, lmm: 900, color: '0.23 0.33 0.68', height: 0.9 },
   pump: { wmm: 1200, lmm: 600, color: '0.93 0.44 0.13', height: 0.6 }
 };
+
+const DEFAULT_ROOM_PRESET = () => ({
+  room: { W: 6000, L: 8000 },
+  floor_items: [
+    { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+    { type: 'table', x: 3800, y: 5200, rotation: 0 },
+    { type: 'pump', x: 4200, y: 3400, rotation: 0 },
+    { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+  ],
+  wall_items: [
+    { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+    { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+  ],
+  custom_walls: [],
+  doors: []
+});
 
 const WALL_COLOR = '0.84 0.80 0.76';
 const CUSTOM_WALL_COLOR = '0.65 0.50 0.42';
@@ -462,6 +622,21 @@ function apply() {
   renderLayout3d();
 }
 
+
+function applyDefaultPreset() {
+  const preset = DEFAULT_ROOM_PRESET();
+  layout.room.Wmm = preset.room.W;
+  layout.room.Lmm = preset.room.L;
+  Wmm.value = layout.room.Wmm;
+  Lmm.value = layout.room.Lmm;
+  layout.floor_items = (preset.floor_items || []).map(normalizeFloorItem);
+  layout.wall_items = (preset.wall_items || []).map(normalizeWallItem);
+  layout.custom_walls = (preset.custom_walls || []).map(normalizeCustomWall);
+  layout.doors = (preset.doors || []).map(normalizeDoor);
+  ensureLayoutIds();
+  apply();
+}
+
 applyBtn.addEventListener('click', apply);
 
 homeBtn.addEventListener('click', () => {
@@ -485,8 +660,7 @@ importInput.addEventListener('change', evt => {
   reader.readAsText(file);
 });
 
-ensureLayoutIds();
-apply();
-</script>
+applyDefaultPreset();
+  </script>
 </body>
 </html>

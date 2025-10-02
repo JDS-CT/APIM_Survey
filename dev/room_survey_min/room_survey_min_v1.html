@@ -1,22 +1,164 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <!-- Prototype version 1 (baseline implementation used as source for future iterations) -->
   <meta charset="utf-8" />
   <title>Room Survey (SVG Drag + Snap) — v1 Baseline</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
   <style>
-    body { font: 14px/1.4 system-ui; margin: 16px; }
-    .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-    label { display: inline-flex; align-items: center; gap: 6px; }
-    input[type="number"] { width: 7em; }
-    #stage { border: 1px solid #ccc; background: #fafafa; }
-    .btn { padding: 6px 10px; border: 1px solid #444; background: #f0f0f0; cursor: pointer; }
-    .legend { margin-top: 8px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
-    .hud { font: 12px/1.2 system-ui; color: #333; }
-    .toggle { display: inline-flex; align-items: center; gap: 6px; }
-    .note { font-size: 12px; color: #555; max-width: 420px; }
-    .wall-choice { min-width: 220px; }
+    :root {
+      color-scheme: light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--room-ui-bg);
+      color: var(--room-ui-text);
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      gap: 16px;
+      border-bottom: 1px solid var(--room-ui-border);
+      background: var(--room-ui-surface);
+      backdrop-filter: blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: var(--room-ui-muted-strong);
+      margin-top: 2px;
+    }
+    nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      text-decoration: none;
+      font-weight: 600;
+      color: var(--room-ui-link);
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .nav-link:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .nav-link.active {
+      background: rgba(37, 99, 235, 0.18);
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 20px;
+      padding: 24px;
+      align-items: start;
+    }
+    aside {
+      display: grid;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--room-ui-surface);
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid var(--room-ui-border-soft);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      display: grid;
+      gap: 12px;
+    }
+    .stage-panel {
+      padding: 0;
+      overflow: hidden;
+    }
+    .stage-panel-inner {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+    .row {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--room-ui-muted-strong);
+    }
+    label input,
+    label select {
+      font: inherit;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--room-ui-border);
+      background: rgba(255, 255, 255, 0.92);
+      min-width: 7em;
+      color: inherit;
+    }
+    input[type="number"] {
+      width: 7em;
+    }
+    .btn {
+      appearance: none;
+      font: inherit;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--room-ui-button-border);
+      background: linear-gradient(180deg, var(--room-ui-button-bg-top), var(--room-ui-button-bg-bottom));
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px var(--room-ui-shadow);
+    }
+    .legend {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--room-ui-muted-strong);
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .hud {
+      font-size: 13px;
+      color: var(--room-ui-muted-strong);
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .note {
+      font-size: 13px;
+      color: var(--room-ui-muted);
+    }
+    .wall-choice {
+      min-width: 220px;
+    }
     .handle { fill: #fff; stroke: #333; stroke-width: 1.5; cursor: pointer; }
     .custom-wall-line { cursor: move; }
     #roomRect.floor-selected { stroke: #1976d2; stroke-width: 3; }
@@ -28,100 +170,133 @@
     body[data-mode="basic"] .custom-only { display: none !important; }
     body[data-mode="custom"] .basic-only { display: none !important; }
     body[data-mode="basic"] .wall-choice { display: none !important; }
+    #stage {
+      width: 100%;
+      height: auto;
+      max-width: 900px;
+      border: 1px solid var(--room-ui-border);
+      background: rgba(255, 255, 255, 0.8);
+      display: block;
+    }
+    .workspace {
+      display: grid;
+      gap: 20px;
+    }
+    .export-panel {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
   </style>
 </head>
 <body>
-<h1>Room Survey (Top-Down)</h1>
+  <header>
+    <div>
+      <strong>Room Survey (Top-Down)</strong>
+      <div class="subtitle">Plan microscope placement, adjust walls, and export layouts for 3D review.</div>
+    </div>
+    <nav>
+      <a class="nav-link" href="../index.html">Home</a>
+      <a class="nav-link active" href="room_survey_min_v1.html">2D Survey</a>
+      <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_v1.html">Orbit Viewer</a>
+      <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_fps_demo.html">First-Person Demo</a>
+    </nav>
+  </header>
+  <main>
+    <aside>
+      <div class="panel">
+        <div class="row" id="primaryControls">
+          <label class="toggle">Room type
+            <select id="roomType">
+              <option value="basic">Basic (Rectangular)</option>
+              <option value="custom">Custom Layout</option>
+            </select>
+          </label>
+          <label class="dim">Width W (mm) <input id="W" type="number" value="6000" min="1000"></label>
+          <label class="dim">Length L (mm) <input id="L" type="number" value="8000" min="1000"></label>
+          <label class="custom-only">Snap (mm) <input id="snap" type="number" value="100" min="10" step="10" title="Grid snap step in millimeters"></label>
+          <label class="toggle custom-only"><input id="imperial" type="checkbox"> Show imperial (in) &amp; use 150&nbsp;mm snap</label>
+          <button class="btn" id="apply">Apply</button>
+        </div>
+        <div class="row basic-only" id="basicAddRow">
+          <label>
+            Add item:
+            <select id="basicAddType">
+              <option value="microscope">Microscope</option>
+              <option value="table">Table</option>
+              <option value="pump">Vacuum Pump</option>
+            </select>
+          </label>
+          <button class="btn" id="basicAdd">Add</button>
+        </div>
+        <div class="row custom-only" id="customAddRow">
+          <label>
+            Add:
+            <select id="addType">
+              <option value="floorBox">Floor Box</option>
+              <option value="microscope">Microscope</option>
+              <option value="table">Table</option>
+              <option value="pump">Vacuum Pump</option>
+              <option value="socket">Wall Socket</option>
+            </select>
+          </label>
+          <label class="wall-choice">
+            Wall for socket:
+            <select id="wallSel"></select>
+          </label>
+          <button class="btn" id="add">Add</button>
+        </div>
+        <div class="row custom-only" id="structureRow">
+          <button class="btn" id="addWall">Draw Wall</button>
+          <button class="btn" id="addDoor">Add Door to Selected Wall</button>
+          <span class="note">Select a wall or floor to attach items. Drag wall end dots to reshape custom walls.</span>
+        </div>
+        <div class="note">Switch to the custom layout to draw new walls, add doors, and place sockets on specific runs.</div>
+      </div>
+      <div class="panel legend">
+        <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
+        <div><span class="dot" style="background:#f9a825"></span>Socket</div>
+        <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
+        <div><span class="dot" style="background:#3949ab"></span>Table</div>
+        <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
+      </div>
+    </aside>
+    <section class="workspace">
+      <div class="panel stage-panel">
+        <div class="stage-panel-inner">
+          <svg id="stage" width="900" height="640" viewBox="0 0 900 640">
+            <!-- Room rectangle (scaled to fit) -->
+            <g id="roomGroup">
+              <rect id="roomRect" x="50" y="50" width="700" height="500" fill="none" stroke="#333" stroke-width="2"/>
+              <!-- Origin marker (rear-left corner) -->
+              <circle id="origin" cx="50" cy="550" r="5" fill="#d33"></circle>
+              <text x="60" y="545" font-size="12">Origin (0,0)</text>
+              <!-- grid group -->
+              <g id="grid"></g>
+            </g>
 
-<div class="row" id="primaryControls">
-  <label class="toggle">Room type
-    <select id="roomType">
-      <option value="basic">Basic (Rectangular)</option>
-      <option value="custom">Custom Layout</option>
-    </select>
-  </label>
-  <label class="dim">Width W (mm) <input id="W" type="number" value="6000" min="1000"></label>
-  <label class="dim">Length L (mm) <input id="L" type="number" value="8000" min="1000"></label>
-  <label class="custom-only">Snap (mm) <input id="snap" type="number" value="100" min="10" step="10" title="Grid snap step in millimeters"></label>
-  <label class="toggle custom-only"><input id="imperial" type="checkbox"> Show imperial (in) & use 150&nbsp;mm snap</label>
-  <button class="btn" id="apply">Apply</button>
-</div>
+            <!-- Draggable items -->
+            <g id="baseWallsOverlay"></g>
+            <g id="wallLabels"></g>
+            <g id="selectionOverlay"></g>
+            <g id="customWalls"></g>
+            <g id="doorsLayer"></g>
+            <g id="floorItems"></g>
+            <g id="wallItems"></g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel export-panel" id="exportRow">
+        <button class="btn" id="export">Export JSON</button>
+        <span class="hud" id="hud"></span>
+      </div>
+    </section>
+  </main>
 
-<div class="row basic-only" id="basicAddRow">
-  <label>
-    Add item:
-    <select id="basicAddType">
-      <option value="microscope">Microscope</option>
-      <option value="table">Table</option>
-      <option value="pump">Vacuum Pump</option>
-    </select>
-  </label>
-  <button class="btn" id="basicAdd">Add</button>
-</div>
+  <script>
 
-<div class="row custom-only" id="customAddRow">
-  <label>
-    Add:
-    <select id="addType">
-      <option value="floorBox">Floor Box</option>
-      <option value="microscope">Microscope</option>
-      <option value="table">Table</option>
-      <option value="pump">Vacuum Pump</option>
-      <option value="socket">Wall Socket</option>
-    </select>
-  </label>
-  <label class="wall-choice">
-    Wall for socket:
-    <select id="wallSel"></select>
-  </label>
-  <button class="btn" id="add">Add</button>
-</div>
-
-<div class="row custom-only" id="structureRow">
-  <button class="btn" id="addWall">Draw Wall</button>
-  <button class="btn" id="addDoor">Add Door to Selected Wall</button>
-  <span class="note">Select a wall or floor to attach items. Drag wall end dots to reshape custom walls.</span>
-</div>
-
-<svg id="stage" width="900" height="640" viewBox="0 0 900 640">
-  <!-- Room rectangle (scaled to fit) -->
-  <g id="roomGroup">
-    <rect id="roomRect" x="50" y="50" width="700" height="500" fill="none" stroke="#333" stroke-width="2"/>
-    <!-- Origin marker (rear-left corner) -->
-    <circle id="origin" cx="50" cy="550" r="5" fill="#d33"></circle>
-    <text x="60" y="545" font-size="12">Origin (0,0)</text>
-    <!-- grid group -->
-    <g id="grid"></g>
-  </g>
-
-  <!-- Draggable items -->
-  <g id="baseWallsOverlay"></g>
-  <g id="wallLabels"></g>
-  <g id="selectionOverlay"></g>
-  <g id="customWalls"></g>
-  <g id="doorsLayer"></g>
-  <g id="floorItems"></g>
-  <g id="wallItems"></g>
-</svg>
-
-<div class="row" id="exportRow">
-  <button class="btn" id="export">Export JSON</button>
-  <span class="hud" id="hud"></span>
-</div>
-
-<div class="legend">
-  <span class="dot" style="background:#1e88e5"></span>Floor Box
-  &nbsp;&nbsp;
-  <span class="dot" style="background:#f9a825"></span>Socket
-  &nbsp;&nbsp;
-  <span class="dot" style="background:#8e24aa"></span>Microscope
-  &nbsp;&nbsp;
-  <span class="dot" style="background:#3949ab"></span>Table
-  &nbsp;&nbsp;
-  <span class="dot" style="background:#ef6c00"></span>Vacuum Pump
-</div>
-
-<script>
 const bodyEl = document.body;
 const svg = document.getElementById('stage');
 const roomTypeSel = document.getElementById('roomType');
@@ -158,6 +333,20 @@ const FLOOR_ITEM_DEFS = {
   pump: { label: 'Vacuum Pump', w: 1200, l: 600, fill: '#ef6c00', stroke: '#e65100' }
 };
 
+const DEFAULT_ROOM_PRESET = () => ({
+  room: { W: 6000, L: 8000 },
+  floor_items: [
+    { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+    { type: 'table', x: 3800, y: 5200, rotation: 0 },
+    { type: 'pump', x: 4200, y: 3400, rotation: 0 },
+    { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+  ],
+  wall_items: [
+    { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+    { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+  ]
+});
+
 const BASE_WALL_THICKNESS = 200;
 const DOOR_DEFAULT_WIDTH = 900;
 const DOOR_DEFAULT_THICKNESS = 80;
@@ -182,6 +371,43 @@ const state = {
 let hudTransient = null;
 let drawWallState = null;
 function showHud(message) { hudTransient = message; }
+
+function isEditingFormControl(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (!tag) return false;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+function applyDefaultPreset() {
+  const preset = DEFAULT_ROOM_PRESET();
+  state.Wmm = preset.room.W;
+  state.Lmm = preset.room.L;
+  state.floorItems = preset.floor_items.map(item => {
+    const def = FLOOR_ITEM_DEFS[item.type] || FLOOR_ITEM_DEFS.floorBox;
+    return {
+      id: genId('floor'),
+      type: item.type,
+      x: snapValue(item.x),
+      y: snapValue(item.y),
+      w: item.w || def.w,
+      l: item.l || def.l,
+      rotation: item.rotation || 0
+    };
+  });
+  state.wallItems = preset.wall_items.map(item => ({
+    id: genId(item.type === 'socket' ? 'socket' : 'wallItem'),
+    ...item
+  }));
+  state.customWalls = [];
+  state.doors = [];
+  state.selectedSurface = { type: 'floor' };
+  Winput.value = state.Wmm;
+  Linput.value = state.Lmm;
+  snapInput.value = state.snap;
+}
+
 
 function mmToIn(mm) { return mm / 25.4; }
 function fmtLen(mm) {
@@ -948,11 +1174,21 @@ function deleteSelectedItem() {
 
 document.addEventListener('keydown', evt => {
   if (evt.key !== 'Delete' && evt.key !== 'Backspace') return;
+  if (isEditingFormControl(document.activeElement)) return;
   const message = deleteSelectedItem();
   if (message) {
     evt.preventDefault();
     showHud(message);
     render();
+  }
+});
+
+document.addEventListener('focusin', evt => {
+  const target = evt.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (svg.contains(target)) return;
+  if (state.selectedSurface?.type && state.selectedSurface.type !== 'floor') {
+    setSelectedSurface({ type: 'floor' });
   }
 });
 
@@ -1140,9 +1376,10 @@ roomTypeSel.addEventListener('change', () => {
 });
 
 // initialize
+applyDefaultPreset();
 setMode('basic');
 recomputeScale();
 render();
-</script>
+  </script>
 </body>
 </html>

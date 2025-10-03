@@ -310,6 +310,7 @@
     </section>
   </main>
 
+  <script src="../shared/scripts/cable_catalog_defaults.js"></script>
   <script type="module">
     import * as THREE from '../shared/vendor/three/three.module.js';
     import { PointerLockControls } from '../shared/vendor/three/PointerLockControls.js';
@@ -342,15 +343,17 @@
     };
 
     const CABLE_CATALOG_URL = '../resources/layout_samples/catalog.json';
-    const CABLE_COLORS = {
-      power: '#1f2933',
-      air: '#e5e7eb',
-      n2: '#16a34a',
-      vacuum: 'rgba(255,255,255,0.7)',
-      water: '#1d4ed8',
-      ethernet: '#facc15',
-      ground: '#22c55e'
-    };
+    const FALLBACK_CABLE_COLORS = (function () {
+      if (!window.DEFAULT_CABLE_CATALOG || !window.DEFAULT_CABLE_CATALOG.cableTypes) {
+        return {};
+      }
+      return Object.fromEntries(
+        Object.entries(window.DEFAULT_CABLE_CATALOG.cableTypes).map(([key, def]) => [
+          key,
+          def && def.color ? def.color : '#94a3b8'
+        ])
+      );
+    })();
     const DEFAULT_CABLE_RADIUS_M = 0.025;
 
     const HAND_MODE_TOGGLE_KEY = 'Control';
@@ -827,11 +830,21 @@
 
     async function ensureCableCatalog() {
       if (cableCatalogData) return cableCatalogData;
-      const resp = await fetch(CABLE_CATALOG_URL, { cache: 'no-store' });
-      if (!resp.ok) {
-        throw new Error(`Failed to load cable catalog: ${resp.status}`);
+      let loaded = null;
+      try {
+        const resp = await fetch(CABLE_CATALOG_URL, { cache: 'no-store' });
+        if (!resp.ok) {
+          throw new Error(`Failed to load cable catalog: ${resp.status}`);
+        }
+        loaded = await resp.json();
+      } catch (err) {
+        console.warn('Falling back to default cable catalog', err);
       }
-      cableCatalogData = await resp.json();
+      if (typeof window.normalizeCableCatalogWithDefaults === 'function') {
+        cableCatalogData = window.normalizeCableCatalogWithDefaults(loaded);
+      } else {
+        cableCatalogData = loaded || window.DEFAULT_CABLE_CATALOG || {};
+      }
       return cableCatalogData;
     }
 
@@ -839,7 +852,11 @@
       const catalogColor = cableCatalogData && cableCatalogData.cableTypes && cableCatalogData.cableTypes[type]
         ? cableCatalogData.cableTypes[type].color
         : null;
-      return catalogColor || CABLE_COLORS[type] || '#94a3b8';
+      if (catalogColor) return catalogColor;
+      if (window.DEFAULT_CABLE_CATALOG && window.DEFAULT_CABLE_CATALOG.cableTypes[type]) {
+        return window.DEFAULT_CABLE_CATALOG.cableTypes[type].color;
+      }
+      return FALLBACK_CABLE_COLORS[type] || (window.getDefaultCableColor ? window.getDefaultCableColor(type) : '#94a3b8');
     }
 
     function parseCableColor(value) {

@@ -307,6 +307,7 @@
     </section>
   </main>
 
+  <script src="../shared/scripts/cable_catalog_defaults.js"></script>
   <script>
 
 const bodyEl = document.body;
@@ -1781,6 +1782,16 @@ async function initializeSurvey() {
 }
 
 const CABLE_CATALOG_URL = '../../resources/layout_samples/catalog.json';
+const FALLBACK_CABLE_COLORS = (function () {
+  if (!window.DEFAULT_CABLE_CATALOG || !window.DEFAULT_CABLE_CATALOG.cableTypes) {
+    return {};
+  }
+  const colors = {};
+  Object.entries(window.DEFAULT_CABLE_CATALOG.cableTypes).forEach(([key, def]) => {
+    colors[key] = def.color;
+  });
+  return colors;
+})();
 const DEFAULT_ROOM_HEIGHT_MM = 3000;
 const CABLE_SAMPLE_SEGMENTS = 48;
 const CABLE_CONTROLS_TEMPLATE = `
@@ -1817,16 +1828,30 @@ function getCableTypeMeta(type) {
 
 function getCableColor(type) {
   const meta = getCableTypeMeta(type);
-  return (meta && meta.color) || '#64748b';
+  if (meta && meta.color) return meta.color;
+  if (window.DEFAULT_CABLE_CATALOG && window.DEFAULT_CABLE_CATALOG.cableTypes[type]) {
+    return window.DEFAULT_CABLE_CATALOG.cableTypes[type].color;
+  }
+  return FALLBACK_CABLE_COLORS[type] || (window.getDefaultCableColor ? window.getDefaultCableColor(type) : '#64748b');
 }
 
 async function ensureCableCatalog() {
   if (cableCatalog) return cableCatalog;
-  const resp = await fetch(CABLE_CATALOG_URL, { cache: 'no-store' });
-  if (!resp.ok) {
-    throw new Error(`Failed to load cable catalog: ${resp.status}`);
+  let loaded = null;
+  try {
+    const resp = await fetch(CABLE_CATALOG_URL, { cache: 'no-store' });
+    if (!resp.ok) {
+      throw new Error(`Failed to load cable catalog: ${resp.status}`);
+    }
+    loaded = await resp.json();
+  } catch (err) {
+    console.warn('Falling back to default cable catalog', err);
   }
-  cableCatalog = await resp.json();
+  if (typeof window.normalizeCableCatalogWithDefaults === 'function') {
+    cableCatalog = window.normalizeCableCatalogWithDefaults(loaded);
+  } else {
+    cableCatalog = loaded || window.DEFAULT_CABLE_CATALOG || {};
+  }
   return cableCatalog;
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-05T00:00:00Z
+- feat: complete step [p1] Ship a shared cable catalog default script and fallbacks so cable type dropdowns populate even when the external JSON fails to load.
+- feat: complete step [p1] Teach both survey and FPV views to reuse the shared defaults for color-coded cable rendering across power, air, N2, ground, vacuum, water, and Ethernet lines.
+- test: extend frontend markup coverage to assert the shared cable defaults are referenced by both experiences.
+
 ## 2025-10-03T21:50:07Z
 - feat: Implemented cable bend insertion/removal and draggable bend handles in the 2D survey so multi-segment Bézier routes can be authored.
 - feat: Taught the FPV demo to honor persisted bend points by sampling chained cubic segments when generating tube geometry and lengths.

@@ -109,8 +109,10 @@ def test_room_survey_exposes_cable_controls_and_rendering() -> None:
         encoding="utf-8"
     )
 
+    assert "shared/scripts/cable_catalog_defaults.js" in html
     assert 'id="cableControls"' in html
     assert "const CABLE_CATALOG_URL" in html
+    assert "normalizeCableCatalogWithDefaults" in html
     assert "function renderCables()" in html
     assert "cables: state.cables.map" in html
 
@@ -130,6 +132,7 @@ def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
         encoding="utf-8"
     )
 
+    assert "shared/scripts/cable_catalog_defaults.js" in html
     assert "const CABLE_CATALOG_URL" in html
-    assert "const CABLE_COLORS" in html
+    assert "normalizeCableCatalogWithDefaults" in html
     assert "async function refreshCableMeshes" in html

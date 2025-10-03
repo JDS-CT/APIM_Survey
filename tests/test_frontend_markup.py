@@ -32,3 +32,7 @@ def test_fps_viewer_handles_pointer_lock_state() -> None:
     assert 'class="control-status"' in html
     assert "function resetMovementState()" in html
     assert "pointerlockerror" in html
+    assert 'id="enter-walk"' in html
+    assert 'id="load-gltf"' in html
+    assert "../shared/vendor/three/GLTFLoader.js" in html
+    assert "./assets/dozenSidedStack-Body.gltf" in html

@@ -246,18 +246,18 @@
     <aside>
       <div>
         <h2>Workflow</h2>
-        <p>Import the JSON exported from the 2D survey, then use first-person controls to explore. The FreeCAD <em>dozenSidedStack</em> sample is included to prove we can load X3D assets.</p>
+        <p>Import the JSON exported from the 2D survey, then use first-person controls to explore. The FreeCAD <em>dozenSidedStack</em> sample is included to prove we can load GLTF assets.</p>
       </div>
       <div class="controls">
         <label>Import 2D Layout JSON
           <input id="layoutImport" type="file" accept="application/json" />
         </label>
         <button id="resetLayout">Reset to Default Room</button>
-        <button id="loadAsset">Load Sample X3D Asset</button>
+        <button id="load-gltf">Load Sample GLTF Asset</button>
         <button id="focusAsset" disabled>Focus on Sample Asset</button>
       </div>
       <div class="controls">
-        <button id="enterWalk">Enter Walk Mode</button>
+        <button id="enter-walk">Enter Walk Mode</button>
         <button id="resetWalk">Reset Walk Position</button>
         <p class="control-status" id="walkStatus" aria-live="polite"></p>
       </div>
@@ -275,7 +275,7 @@
         <span><span class="swatch" style="background:var(--room-ui-legend-custom)"></span> Custom walls</span>
         <span><span class="swatch" style="background:var(--room-ui-legend-door)"></span> Doors (2.1&nbsp;m tall)</span>
         <span><span class="swatch" style="background:var(--room-ui-legend-floor)"></span> Floor items from survey</span>
-        <span><span class="swatch" style="background:var(--room-ui-legend-asset)"></span> Loaded X3D asset</span>
+        <span><span class="swatch" style="background:var(--room-ui-legend-asset)"></span> Loaded GLTF asset</span>
       </div>
     </aside>
     <section class="viewport">
@@ -290,10 +290,10 @@
   </main>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
-    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/PointerLockControls.js';
-    import { TransformControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/TransformControls.js';
-    import { X3DLoader } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/loaders/X3DLoader.js';
+    import * as THREE from '../shared/vendor/three/three.module.js';
+    import { PointerLockControls } from '../shared/vendor/three/PointerLockControls.js';
+    import { TransformControls } from '../shared/vendor/three/TransformControls.js';
+    import { GLTFLoader } from '../shared/vendor/three/GLTFLoader.js';
 
     const mm2m = value => value / 1000;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -342,11 +342,11 @@
 
     const rendererHost = document.getElementById('rendererHost');
     const walkOverlay = document.getElementById('walkOverlay');
-    const enterWalkBtn = document.getElementById('enterWalk');
+    const enterWalkBtn = document.getElementById('enter-walk');
     const resetWalkBtn = document.getElementById('resetWalk');
     const layoutImport = document.getElementById('layoutImport');
     const resetLayoutBtn = document.getElementById('resetLayout');
-    const loadAssetBtn = document.getElementById('loadAsset');
+    const loadGltfBtn = document.getElementById('load-gltf');
     const focusAssetBtn = document.getElementById('focusAsset');
     const roomInfo = document.getElementById('roomInfo');
     const walkStatus = document.getElementById('walkStatus');
@@ -1242,28 +1242,46 @@
       });
     }
 
-    loadAssetBtn.addEventListener('click', () => {
-      loadSampleAsset();
-    });
+    if (loadGltfBtn) {
+      loadGltfBtn.addEventListener('click', () => {
+        loadSampleAsset();
+      });
+    }
 
-    const loader = new X3DLoader();
+    const loader = new GLTFLoader();
 
     function loadSampleAsset() {
-      loadAssetBtn.disabled = true;
+      if (!loadGltfBtn) return;
+      loadGltfBtn.disabled = true;
       loader.load(
-        './dozenSidedStack-Body.x3d',
-        object => {
-          const bbox = new THREE.Box3().setFromObject(object);
+        './assets/dozenSidedStack-Body.gltf',
+        gltf => {
+          const root = gltf.scene || (Array.isArray(gltf.scenes) ? gltf.scenes[0] : null);
+          if (!root) {
+            console.error('GLTF load succeeded but no scene graph was found.', gltf);
+            alert('Unable to load the sample GLTF scene. See console for details.');
+            loadGltfBtn.disabled = false;
+            return;
+          }
+
+          root.traverse(node => {
+            if (node.isMesh) {
+              node.castShadow = false;
+              node.receiveShadow = true;
+            }
+          });
+
+          const bbox = new THREE.Box3().setFromObject(root);
           const center = new THREE.Vector3();
           const size = new THREE.Vector3();
           bbox.getCenter(center);
           bbox.getSize(size);
-          object.position.sub(center);
+          root.position.sub(center);
           const scale = 0.001; // FreeCAD export uses millimeters
-          object.scale.setScalar(scale);
+          root.scale.setScalar(scale);
           assetSize = size.clone().multiplyScalar(scale);
           assetAnchor.clear();
-          assetAnchor.add(object);
+          assetAnchor.add(root);
           assetAnchor.visible = true;
           const baseY = assetSize.y / 2;
           assetAnchor.position.set(0, baseY, 0);
@@ -1271,15 +1289,15 @@
           selectable.splice(0, selectable.length, assetAnchor);
           assetLoaded = true;
           selectObject(assetAnchor);
-          loadAssetBtn.disabled = false;
-          loadAssetBtn.textContent = 'Reload Sample X3D Asset';
+          loadGltfBtn.disabled = false;
+          loadGltfBtn.textContent = 'Reload Sample GLTF Asset';
           repositionAssetIfNeeded();
         },
         undefined,
         error => {
-          console.error('Failed to load X3D asset', error);
-          alert('Unable to load the sample X3D file. See console for details.');
-          loadAssetBtn.disabled = false;
+          console.error('Failed to load GLTF asset', error);
+          alert('Unable to load the sample GLTF file. See console for details.');
+          loadGltfBtn.disabled = false;
         }
       );
     }

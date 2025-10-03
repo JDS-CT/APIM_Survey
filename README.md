@@ -1,29 +1,50 @@
 # APIM Survey Prototype Workspace
 
-This repository now groups the survey and room-planning experiments into a
-`dev/` workspace so new iterations can be spun up without overwriting earlier
-work. The structure is designed to support a "pick the best of three" flow for
-key pages.
+This workspace hosts the microscope room planning prototypes that move from 2D
+layout capture to 3D review. Everything you need to run the current iteration
+lives under `dev/`, and the landing page links to the four supported flows:
+
+* **Home** (`dev/index.html`) &mdash; overview and navigation hub.
+* **2D Survey** (`dev/room_survey_min/room_survey_min_v1.html`) &mdash; capture room
+  dimensions, equipment, sockets, walls, and doors.
+* **Orbit Viewer** (`dev/interactive_3d_room/interactive_3d_room_v1.html`) &mdash;
+  extrude the survey export and orbit the room.
+* **First-Person Demo**
+  (`dev/interactive_3d_room/interactive_3d_room_fps_demo.html`) &mdash; walk the
+  space with WASD controls and place sample 3D assets.
+
+Older experiments now live in `dev/archive/` to keep the navigation focused.
+
+## Running the prototype server
+
+The Python standard-library server in `dev/server.py` serves the entire `dev/`
+directory and persists layouts to disk. From the repository root:
+
+```bash
+python dev/server.py
+```
+
+You should see output similar to:
 
 ```
-dev/
-├── interactive_3d_room/
-│   └── interactive_3d_room_v1.html    # X3DOM-driven 3D preview baseline
-├── room_survey_min/
-│   ├── room_survey_min_v1.html        # Baseline grid & drag prototype
-│   ├── room_survey_min_v2.html        # Copy ready for next experiment
-│   └── room_survey_min_v3.html        # Alternate copy for experimentation
-├── shared/
-│   └── styles/
-│       └── portal_overview.css        # Dark/neon portal theme
-└── x3d_inline_with_2ft_cube/
-    └── x3d_inline_with_2ft_cube_v1.html
+Serving prototypes on http://127.0.0.1:5000/ (layout store: dev/data/saved_layout.json)
 ```
 
-The `3d_resources/` directory is kept at the repository root so the assets can
-be fed into both the 2D editor and any 3D preview that needs to inline them.
-Each HTML page currently references assets relative to its own folder, making it
-straightforward to duplicate a version directory when branching experiments.
+Open that URL in a browser to access the landing page and linked prototypes. The
+server exposes a simple JSON API at `/api/layout` that the Orbit Viewer uses to
+save and restore layouts (`GET` returns the last saved payload, `POST` persists
+the provided JSON object).
 
-To start a new iteration on `room_survey_min`, clone the baseline version that
-performed best, increment the version suffix, and begin editing.
+## 2D &rarr; 3D workflow
+
+1. Launch the 2D Survey from the home page, adjust the room and equipment, and
+   click **Export JSON**. The browser downloads `room_survey.json`.
+2. Visit the Orbit Viewer, click **Import Layout**, and choose that JSON file.
+   Successful imports flash a green status banner and refresh the 3D scene.
+3. (Optional) Visit the First-Person Demo, click **Import 2D Layout JSON**, and
+   pick the same export to update the walkthrough and collision bounds.
+4. Use **Save Layout** in the Orbit Viewer to write the current snapshot to the
+   server (persisted at `dev/data/saved_layout.json`).
+
+If you need a known-good file for testing, `resources/layout_samples/default_room.json`
+matches the default survey preset.

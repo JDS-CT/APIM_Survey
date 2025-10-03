@@ -537,7 +537,10 @@
       if (typeof rawText !== 'string') {
         throw new Error('layout-file-empty');
       }
-      const sanitized = rawText.replace(/^\uFEFF/, '').trim();
+      const sanitized = rawText
+        .replace(/^\uFEFF/, '')
+        .replace(/\u0000/g, '')
+        .trim();
       if (!sanitized) {
         throw new Error('layout-file-empty');
       }
@@ -546,6 +549,7 @@
       } catch (err) {
         const error = new Error('layout-file-invalid');
         error.cause = err;
+        error.raw = sanitized.slice(0, 1200);
         throw error;
       }
     }
@@ -1004,6 +1008,9 @@
           ingestLayout(data);
         } catch (err) {
           console.error('Failed to parse layout JSON', err);
+          if (err && err.cause) {
+            console.error('Inner error:', err.cause);
+          }
           const code = err && err.message;
           const message = code === 'layout-file-empty'
             ? 'The selected file was empty.'

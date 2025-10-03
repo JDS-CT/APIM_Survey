@@ -60,3 +60,13 @@ def test_fps_viewer_supports_hand_mode_and_vertical_translation() -> None:
     assert "scheduleWalkOverlayAutoHide" in html
     assert "velocity.y += direction.y * speed * delta" in html
     assert "selectedObject.position.y -= verticalStep" in html
+
+
+def test_fps_viewer_traps_space_scroll_and_updates_controls_copy() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function maybePreventNavigationKey" in html
+    assert "Press <strong>Ctrl</strong> to toggle <strong>Hand Mode</strong>" in html
+    assert "Hold <strong>Alt</strong> and drag" in html

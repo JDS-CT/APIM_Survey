@@ -1,5 +1,9 @@
 # Changelog
 
+## 2025-10-03T11:26:46Z
+- fix: complete step [p1] Investigate and resolve the First-Person Demo controls mismatch by trapping Space/Shift scrolling, tracking viewport focus, and keeping the published copy in sync with Hand Mode guidance.
+- test: complete step [p1] Extend the FPS frontend markup assertions to cover the new navigation guard helper and refreshed control instructions.
+
 ## 2025-10-03T10:51:44Z
 - fix: complete step [p1] Stabilize the orbit and MWE viewers by disabling X3D examine inertia drift via explicit NavigationInfo typeParams.
 - fix: complete step [p1] Remap the FPS controller so Space lifts and Shift descends while damping vertical velocity correctly.

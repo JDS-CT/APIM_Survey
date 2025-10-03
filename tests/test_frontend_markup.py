@@ -9,3 +9,15 @@ def test_orbit_viewer_uses_x3d_namespace() -> None:
 
     for tag in ["Coordinate", "Shape", "Appearance", "Material", "Box", "Transform"]:
         assert f"createX3DElement('{tag}')" in html
+
+
+def test_home_nav_includes_mwe_tab() -> None:
+    html = Path("dev/index.html").read_text(encoding="utf-8")
+    assert "href=\"test_objects/mwe_viewer.html\"" in html
+    assert ">MWE Viewer<" in html
+
+
+def test_room_survey_references_layout_persistence() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(encoding="utf-8")
+    assert "LAYOUT_STORAGE_KEY" in html
+    assert "/api/layout" in html

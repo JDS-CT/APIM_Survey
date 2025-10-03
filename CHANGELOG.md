@@ -1,5 +1,12 @@
 # Changelog
 
+## 2025-10-03T01:35:44Z
+- fix: complete step [p1] Reproduce the `default_room.json` import failure and harden the parser with a fallback slice so legacy exports no longer trigger the generic alert.
+- fix: complete step [p1] Update the orbit viewer loader to preserve furniture transforms by normalizing incoming layout payloads instead of resetting to presets.
+- feat: complete step [p1] Add a themed MWE viewer tab with the dozen-sided stack inline asset so the baseline X3D runtime stays verifiable on the hosted server.
+- feat: tighten the 2D survey initialization to restore layouts from `/api/layout` or local storage and persist edits with throttled saves for cross-tab continuity.
+- test: extend frontend markup checks to cover the new MWE navigation link and ensure the 2D survey references the shared layout persistence key.
+
 ## 2025-10-03T00:58:56Z
 - fix: complete step [p1] Compare the orbit viewer markup against the working X3D MWE to pinpoint missing runtime namespace usage.
 - fix: complete step [p1] Refactor interactive_3d_room_v1.html to create X3D nodes with document.createElementNS so room geometry renders.

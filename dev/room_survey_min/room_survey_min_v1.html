@@ -215,6 +215,7 @@
       <a class="nav-link active" href="room_survey_min_v1.html">2D Survey</a>
       <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_v1.html">Orbit Viewer</a>
       <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_fps_demo.html">First-Person Demo</a>
+      <a class="nav-link" href="../test_objects/mwe_viewer.html">MWE Viewer</a>
     </nav>
   </header>
   <main>
@@ -339,6 +340,9 @@ const doorsG = document.getElementById('doorsLayer');
 const floorItemsG = document.getElementById('floorItems');
 const wallItemsG = document.getElementById('wallItems');
 
+const LAYOUT_STORAGE_KEY = 'room-orbit-viewer.latest-layout';
+const LAYOUT_PERSIST_DELAY_MS = 240;
+
 const FLOOR_ITEM_DEFS = {
   floorBox: { label: 'Floor Box', w: 600, l: 600, fill: '#1e88e5', stroke: '#1e88e5' },
   microscope: { label: 'Microscope', w: 2200, l: 1800, fill: '#8e24aa', stroke: '#5e35b1' },
@@ -365,6 +369,12 @@ const DOOR_DEFAULT_WIDTH = 900;
 const DOOR_DEFAULT_THICKNESS = 80;
 
 let idCounter = 1;
+let suppressPersist = false;
+let pendingPersist = null;
+let persistTimer = null;
+let flushingPersist = false;
+let lastPersistedSerialized = null;
+
 function genId(prefix = 'id') { return `${prefix}_${idCounter++}`; }
 
 const state = {
@@ -384,6 +394,11 @@ const state = {
 let hudTransient = null;
 let drawWallState = null;
 function showHud(message) { hudTransient = message; }
+
+function toNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
 
 function isEditingFormControl(el) {
   if (!el) return false;
@@ -421,6 +436,335 @@ function applyDefaultPreset() {
   snapInput.value = state.snap;
 }
 
+
+function normalizeFloorItemFromLayout(item) {
+  if (!item || typeof item !== 'object') return null;
+  const type = item.type || 'floorBox';
+  const def = FLOOR_ITEM_DEFS[type] || FLOOR_ITEM_DEFS.floorBox;
+  const id = item.id !== undefined ? String(item.id) : genId('floor');
+  return {
+    id,
+    type,
+    x: toNumber(item.x, 0),
+    y: toNumber(item.y, 0),
+    w: toNumber(item.w ?? item.size ?? def.w, def.w),
+    l: toNumber(item.l ?? item.size ?? def.l, def.l),
+    rotation: toNumber(item.rotation, 0)
+  };
+}
+
+function normalizeWallItemFromLayout(item) {
+  if (!item || typeof item !== 'object') return null;
+  const id = item.id !== undefined ? String(item.id) : genId('wallItem');
+  let wallRef = item.wall;
+  if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+  if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  return {
+    id,
+    type: item.type || 'socket',
+    wall: wallRef || 'base:1',
+    s: toNumber(item.s, 0),
+    h: toNumber(item.h, 0)
+  };
+}
+
+function normalizeCustomWallFromLayout(wall) {
+  if (!wall || typeof wall !== 'object') return null;
+  const id = wall.id !== undefined ? String(wall.id) : genId('cw');
+  return {
+    id,
+    name: wall.name,
+    x1: toNumber(wall.x1, 0),
+    y1: toNumber(wall.y1, 0),
+    x2: toNumber(wall.x2, 0),
+    y2: toNumber(wall.y2, 0),
+    thickness: toNumber(wall.thickness, BASE_WALL_THICKNESS)
+  };
+}
+
+function normalizeDoorFromLayout(door) {
+  if (!door || typeof door !== 'object') return null;
+  const id = door.id !== undefined ? String(door.id) : genId('door');
+  let wallRef = door.wall;
+  if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
+  if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  return {
+    id,
+    wall: wallRef || 'base:1',
+    offset: toNumber(door.offset, 0),
+    width: toNumber(door.width, DOOR_DEFAULT_WIDTH),
+    thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS)
+  };
+}
+
+function snapshotSelectedSurface(surface) {
+  if (!surface || typeof surface !== 'object') return { type: 'floor' };
+  if (surface.type === 'wall' && surface.ref) return { type: 'wall', ref: surface.ref };
+  if ((surface.type === 'floorItem' || surface.type === 'wallItem' || surface.type === 'door') && surface.id) {
+    return { type: surface.type, id: surface.id };
+  }
+  if (surface.type === 'floor') return { type: 'floor' };
+  return { type: 'floor' };
+}
+
+function normalizeSelectedSurface(surface) {
+  if (!surface || typeof surface !== 'object') return { type: 'floor' };
+  if (surface.type === 'wall' && surface.ref) return { type: 'wall', ref: surface.ref };
+  if ((surface.type === 'floorItem' || surface.type === 'wallItem' || surface.type === 'door') && surface.id) {
+    return { type: surface.type, id: surface.id };
+  }
+  if (surface.type === 'floor') return { type: 'floor' };
+  return { type: 'floor' };
+}
+
+function snapshotLayout() {
+  return {
+    units: 'mm',
+    room: { W: Math.round(state.Wmm), L: Math.round(state.Lmm) },
+    snap_mm: Math.round(state.snap),
+    imperial_display: !!state.imperial,
+    mode: state.mode,
+    floor_items: state.floorItems.map(item => ({
+      id: item.id,
+      type: item.type,
+      x: Math.round(item.x),
+      y: Math.round(item.y),
+      w: Math.round(item.w),
+      l: Math.round(item.l),
+      rotation: Math.round(item.rotation || 0)
+    })),
+    wall_items: state.wallItems.map(item => ({
+      id: item.id,
+      type: item.type,
+      wall: item.wall,
+      s: Math.round(item.s || 0),
+      h: Math.round(item.h || 0)
+    })),
+    custom_walls: state.customWalls.map(wall => ({
+      id: wall.id,
+      name: wall.name,
+      x1: Math.round(wall.x1),
+      y1: Math.round(wall.y1),
+      x2: Math.round(wall.x2),
+      y2: Math.round(wall.y2),
+      thickness: Math.round(wall.thickness || BASE_WALL_THICKNESS)
+    })),
+    doors: state.doors.map(door => ({
+      id: door.id,
+      wall: door.wall,
+      offset: Math.round(door.offset || 0),
+      width: Math.round(door.width || DOOR_DEFAULT_WIDTH),
+      thickness: Math.round(door.thickness || DOOR_DEFAULT_THICKNESS)
+    })),
+    selected_surface: snapshotSelectedSurface(state.selectedSurface)
+  };
+}
+
+function persistLayoutLocal(payload) {
+  try {
+    if (window.localStorage) {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(payload));
+    }
+  } catch (err) {
+    console.warn('Failed to persist layout locally', err);
+  }
+}
+
+function loadLayoutLocal() {
+  try {
+    if (!window.localStorage) return null;
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load layout from local storage', err);
+    return null;
+  }
+}
+
+async function saveLayoutRemote(payload) {
+  try {
+    const resp = await fetch('/api/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return true;
+  } catch (err) {
+    console.warn('Failed to save layout to server', err);
+    return false;
+  }
+}
+
+async function loadLayoutRemote() {
+  try {
+    const resp = await fetch('/api/layout', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    if (!resp.ok) {
+      if (resp.status === 404) return null;
+      throw new Error(await resp.text());
+    }
+    const text = await resp.text();
+    if (!text) return null;
+    const payload = JSON.parse(text);
+    if (payload && typeof payload === 'object') {
+      if (payload.layout !== undefined) return payload.layout;
+      return payload;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Failed to load layout from server', err);
+    return null;
+  }
+}
+
+async function restorePersistedLayout({ preferRemote = true } = {}) {
+  const order = preferRemote ? ['remote', 'local'] : ['local', 'remote'];
+  for (const source of order) {
+    if (source === 'remote') {
+      const remote = await loadLayoutRemote();
+      if (remote) return { data: remote, source: 'server' };
+    } else {
+      const local = loadLayoutLocal();
+      if (local) return { data: local, source: 'local' };
+    }
+  }
+  return null;
+}
+
+function schedulePersist(snapshot) {
+  if (suppressPersist) return;
+  const serialized = JSON.stringify(snapshot);
+  if (serialized === lastPersistedSerialized && !pendingPersist) return;
+  pendingPersist = {
+    snapshot: JSON.parse(JSON.stringify(snapshot)),
+    serialized
+  };
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void flushPersistQueue();
+  }, LAYOUT_PERSIST_DELAY_MS);
+}
+
+async function flushPersistQueue() {
+  if (flushingPersist) return;
+  flushingPersist = true;
+  try {
+    while (pendingPersist) {
+      const current = pendingPersist;
+      pendingPersist = null;
+      persistLayoutLocal(current.snapshot);
+      const ok = await saveLayoutRemote(current.snapshot);
+      if (!ok) {
+        console.warn('Unable to sync layout to server; will retry on next change.');
+      }
+      lastPersistedSerialized = current.serialized;
+    }
+  } finally {
+    flushingPersist = false;
+    if (pendingPersist && !persistTimer) {
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        void flushPersistQueue();
+      }, LAYOUT_PERSIST_DELAY_MS);
+    }
+  }
+}
+
+function maybePersistLayout() {
+  if (suppressPersist) return;
+  const snapshot = snapshotLayout();
+  schedulePersist(snapshot);
+}
+
+function syncIdCounterFromLayout() {
+  const ids = [
+    ...state.floorItems.map(it => it.id),
+    ...state.wallItems.map(it => it.id),
+    ...state.customWalls.map(it => it.id),
+    ...state.doors.map(it => it.id)
+  ];
+  ids.forEach(id => {
+    const match = id ? String(id).match(/_(\d+)$/) : null;
+    if (match) {
+      const candidate = Number(match[1]);
+      if (Number.isFinite(candidate)) {
+        idCounter = Math.max(idCounter, candidate + 1);
+      }
+    }
+  });
+}
+
+function applyLayout(raw, { skipPersist = false, message } = {}) {
+  if (!raw || typeof raw !== 'object') return false;
+  const layout = raw.layout && typeof raw.layout === 'object' ? raw.layout : raw;
+  suppressPersist = true;
+  try {
+    if (message) showHud(message);
+    if (layout.room) {
+      state.Wmm = Math.max(1000, toNumber(layout.room.W ?? layout.room.width, state.Wmm));
+      state.Lmm = Math.max(1000, toNumber(layout.room.L ?? layout.room.length, state.Lmm));
+    }
+    Winput.value = state.Wmm;
+    Linput.value = state.Lmm;
+
+    if (layout.snap_mm !== undefined) {
+      state.snap = Math.max(10, toNumber(layout.snap_mm, state.snap));
+    }
+    if (layout.imperial_display !== undefined) {
+      state.imperial = !!layout.imperial_display;
+    }
+    imperialChk.checked = state.imperial;
+    if (state.imperial) {
+      state.snap = 150;
+    }
+    snapInput.value = state.snap;
+
+    const floorItems = Array.isArray(layout.floor_items)
+      ? layout.floor_items
+      : Array.isArray(layout.items)
+        ? layout.items.filter(item => item && item.type !== 'socket')
+        : [];
+    const wallItems = Array.isArray(layout.wall_items)
+      ? layout.wall_items
+      : Array.isArray(layout.items)
+        ? layout.items.filter(item => item && item.type === 'socket')
+        : [];
+
+    state.floorItems = floorItems.map(normalizeFloorItemFromLayout).filter(Boolean);
+    state.wallItems = wallItems.map(normalizeWallItemFromLayout).filter(Boolean);
+    state.customWalls = Array.isArray(layout.custom_walls)
+      ? layout.custom_walls.map(normalizeCustomWallFromLayout).filter(Boolean)
+      : [];
+    state.doors = Array.isArray(layout.doors)
+      ? layout.doors.map(normalizeDoorFromLayout).filter(Boolean)
+      : [];
+
+    syncIdCounterFromLayout();
+    recomputeScale();
+    clampStateToRoom();
+    const nextMode = typeof layout.mode === 'string' ? layout.mode : state.mode;
+    setMode(nextMode || 'basic');
+    const surface = normalizeSelectedSurface(layout.selected_surface);
+    setSelectedSurface(surface, { skipRender: true });
+  } finally {
+    suppressPersist = false;
+  }
+
+  const snapshot = snapshotLayout();
+  if (skipPersist) {
+    persistLayoutLocal(snapshot);
+    lastPersistedSerialized = JSON.stringify(snapshot);
+  } else {
+    schedulePersist(snapshot);
+  }
+  return true;
+}
 
 function mmToIn(mm) { return mm / 25.4; }
 function fmtLen(mm) {
@@ -727,6 +1071,7 @@ function render() {
   renderSelection();
   hud.textContent = hudTransient || defaultHudMessage();
   hudTransient = null;
+  maybePersistLayout();
 }
 
 function renderBaseWallsOverlay() {
@@ -1363,19 +1708,8 @@ addDoorBtn.addEventListener('click', () => {
 });
 
 exportBtn.addEventListener('click', () => {
-  const out = {
-    units: 'mm',
-    room: { W: state.Wmm, L: state.Lmm },
-    snap_mm: state.snap,
-    imperial_display: state.imperial,
-    mode: state.mode,
-    floor_items: state.floorItems,
-    wall_items: state.wallItems,
-    custom_walls: state.customWalls,
-    doors: state.doors,
-    selected_surface: state.selectedSurface
-  };
-  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const snapshot = snapshotLayout();
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -1389,10 +1723,28 @@ roomTypeSel.addEventListener('change', () => {
 });
 
 // initialize
-applyDefaultPreset();
-setMode('basic');
-recomputeScale();
-render();
+async function initializeSurvey() {
+  try {
+    const restored = await restorePersistedLayout({ preferRemote: true });
+    if (restored && restored.data) {
+      applyLayout(restored.data, {
+        skipPersist: true,
+        message: restored.source === 'server'
+          ? 'Restored layout from server.'
+          : 'Restored layout from previous session.'
+      });
+      return;
+    }
+  } catch (err) {
+    console.error('Failed to load persisted layout', err);
+  }
+  applyDefaultPreset();
+  recomputeScale();
+  showHud('Loaded demo preset layout.');
+  setMode('basic');
+}
+
+initializeSurvey();
   </script>
 </body>
 </html>

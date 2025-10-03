@@ -332,6 +332,8 @@
       doors: []
     };
 
+    const LAYOUT_STORAGE_KEY = 'room-fps-viewer.latest-layout';
+
     const rendererHost = document.getElementById('rendererHost');
     const walkOverlay = document.getElementById('walkOverlay');
     const enterWalkBtn = document.getElementById('enterWalk');
@@ -366,6 +368,7 @@
     renderer.shadowMap.enabled = false;
     renderer.setClearColor(scene.background);
     rendererHost.appendChild(renderer.domElement);
+    renderer.domElement.tabIndex = -1;
 
     const pointerControls = new PointerLockControls(camera, renderer.domElement);
     const transformControls = new TransformControls(camera, renderer.domElement);
@@ -554,6 +557,137 @@
       }
     }
 
+    function persistLayoutLocal(data) {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn('Failed to persist layout locally', err);
+      }
+    }
+
+    function loadLayoutLocal() {
+      try {
+        if (!window.localStorage) return null;
+        const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (err) {
+        console.warn('Failed to load layout from local storage', err);
+        return null;
+      }
+    }
+
+    async function saveLayoutRemote(data) {
+      try {
+        const resp = await fetch('/api/layout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        return true;
+      } catch (err) {
+        console.warn('Failed to save layout to server', err);
+        return false;
+      }
+    }
+
+    async function loadLayoutRemote() {
+      try {
+        const resp = await fetch('/api/layout', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        if (!resp.ok) {
+          if (resp.status === 404) return null;
+          throw new Error(await resp.text());
+        }
+        const text = await resp.text();
+        if (!text) return null;
+        const payload = JSON.parse(text);
+        if (payload && typeof payload === 'object' && payload.layout !== undefined) {
+          return payload.layout;
+        }
+        if (payload && typeof payload === 'object') {
+          return payload;
+        }
+        return null;
+      } catch (err) {
+        console.warn('Failed to load layout from server', err);
+        return null;
+      }
+    }
+
+    async function restorePersistedLayout(options = {}) {
+      const { preferRemote = false } = options;
+      const order = preferRemote ? ['remote', 'local'] : ['local', 'remote'];
+      for (const source of order) {
+        if (source === 'local') {
+          const local = loadLayoutLocal();
+          if (local) return { data: local, source: 'local' };
+        } else {
+          const remote = await loadLayoutRemote();
+          if (remote) return { data: remote, source: 'server' };
+        }
+      }
+      return null;
+    }
+
+    function snapshotLayout() {
+      ensureLayoutIds();
+      return {
+        room: {
+          W: toNumber(layout.room.Wmm, 6000),
+          L: toNumber(layout.room.Lmm, 8000)
+        },
+        floor_items: (layout.floor_items || []).map(item => {
+          const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
+          return {
+            id: item.id,
+            type: item.type,
+            x: toNumber(item.x, layout.room.Wmm / 2),
+            y: toNumber(item.y, layout.room.Lmm / 2),
+            w: toNumber(item.w, meta.wmm),
+            l: toNumber(item.l, meta.lmm),
+            rotation: toNumber(item.rotation, 0)
+          };
+        }),
+        wall_items: (layout.wall_items || []).map(item => ({
+          id: item.id,
+          type: item.type,
+          wall: item.wall,
+          s: toNumber(item.s, 0),
+          h: toNumber(item.h, 0)
+        })),
+        custom_walls: (layout.custom_walls || []).map(wall => ({
+          id: wall.id,
+          name: wall.name,
+          x1: toNumber(wall.x1, 0),
+          y1: toNumber(wall.y1, 0),
+          x2: toNumber(wall.x2, 0),
+          y2: toNumber(wall.y2, 0),
+          thickness: toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM)
+        })),
+        doors: (layout.doors || []).map(door => ({
+          id: door.id,
+          wall: door.wall,
+          offset: toNumber(door.offset, 0),
+          width: toNumber(door.width, 900),
+          thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM)
+        }))
+      };
+    }
+
+    function persistLatest(options = {}) {
+      const { local = true, remote = true } = options;
+      const snapshot = snapshotLayout();
+      if (local) persistLayoutLocal(snapshot);
+      if (remote) saveLayoutRemote(snapshot);
+    }
+
     function ensureLayoutIds() {
       layout.custom_walls = (layout.custom_walls || []).map(normalizeCustomWall);
       layout.doors = (layout.doors || []).map(normalizeDoor);
@@ -561,7 +695,7 @@
       layout.wall_items = (layout.wall_items || []).map(normalizeWallItem);
     }
 
-    function ingestLayout(data) {
+    function ingestLayout(data, persistOptions = {}) {
       if (data.room) {
         const roomW = data.room.W !== undefined ? data.room.W : data.room.Wmm;
         const roomL = data.room.L !== undefined ? data.room.L : data.room.Lmm;
@@ -588,6 +722,7 @@
       ensureLayoutIds();
       applyLayout();
       selectObject(null);
+      persistLatest(persistOptions);
     }
 
     function mmPointToWorld(xMm, yMm) {
@@ -956,7 +1091,7 @@
     renderer.domElement.addEventListener('pointerup', endOrbit);
     renderer.domElement.addEventListener('pointercancel', endOrbit);
 
-    function resetLayout() {
+    function resetLayout(persistOptions = {}) {
       const preset = DEFAULT_ROOM_PRESET();
       layout.room.Wmm = preset.room.W;
       layout.room.Lmm = preset.room.L;
@@ -966,6 +1101,7 @@
       layout.doors = (preset.doors || []).map(normalizeDoor);
       applyLayout();
       selectObject(null);
+      persistLatest(persistOptions);
     }
 
     function focusOnAsset() {
@@ -982,6 +1118,13 @@
     }
 
     enterWalkBtn.addEventListener('click', () => {
+      if (renderer.domElement && typeof renderer.domElement.focus === 'function') {
+        try {
+          renderer.domElement.focus();
+        } catch (err) {
+          console.warn('Unable to focus renderer element before pointer lock', err);
+        }
+      }
       pointerControls.lock();
     });
 
@@ -1070,9 +1213,19 @@
 
     window.addEventListener('resize', onWindowResize);
 
-    resetLayout();
+    resetLayout({ local: false, remote: false });
     updateRendererSize();
     animate();
+
+    (async () => {
+      const restored = await restorePersistedLayout({ preferRemote: true });
+      if (restored && restored.data) {
+        const persistOptions = restored.source === 'server'
+          ? { local: true, remote: false }
+          : { local: true, remote: true };
+        ingestLayout(restored.data, persistOptions);
+      }
+    })();
   </script>
 </body>
 </html>

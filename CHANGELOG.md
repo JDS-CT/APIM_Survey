@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T01:10Z
+- fix: complete step [p1] Investigate why the FPS viewer prototype was not persisting imported layouts and confirm server storage paths.
+- feat: complete step [p1] Implement layout persistence (local storage + server sync) for the FPS viewer and trigger it after imports and resets.
+- chore: Focus the WebGL canvas before requesting pointer lock so “Enter Walk Mode” reliably engages across browsers.
+
 ## 2025-10-03T00:25Z
 - feat: complete step [p1] Create regression coverage for layout store resolution, environment overrides, and shutdown handling in tests/test_server.py.
 - fix: complete step [p1] Normalize dev/server.py store path resolution with env/CLI overrides and eagerly prepare the persistence directory.

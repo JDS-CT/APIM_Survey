@@ -3,9 +3,9 @@ TEST -- using AGENTS.md file
 ✅ [p1] Remove the obsolete MWE viewer by deleting dev/test_objects/mwe_viewer.html and stripping all navigation links or tests that reference it.
 ✅ [p1] Excise the broken orbit viewer references from marketing copy and persistence keys so only the 2D survey and FPV flows remain.
 ✅ [p1] Persist placed GLTF assets across the 2D survey and FPV views by serializing placements to shared storage and restoring them when either view loads.
-🔲 [p1] Draft two prototype approaches for connecting items with curved joints, including how to register connection points on bounding boxes.  
+✅ [p1] Draft two prototype approaches for connecting items with curved joints, including how to register connection points on bounding boxes.
 Prototypes should target draggable Bézier splines and, if feasible, a physics-based cable simulation. Cables must connect by clicking endpoints and allow realistic movement with a max length limit (e.g., 10 ft / 3 m). Physics-based routing may bias cables to avoid objects, but manual bend points remain acceptable. Some machines can hold cables in service loops, so only max length is enforced.
-🔲 [p1] Identify required metadata schema updates so cables can snap to defined connection sockets on each asset. No rotation/orientation data is required. Metadata should only define which cable types are valid for which machine types. The goal is simple layout validation, not CAD-level detail.
+✅ [p1] Identify required metadata schema updates so cables can snap to defined connection sockets on each asset. No rotation/orientation data is required. Metadata should only define which cable types are valid for which machine types. The goal is simple layout validation, not CAD-level detail.
 🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
 🔲 [p2] Add an automated check that first-person mode stops moving when no input is pressed.
 🔲 [p2] Backfill regression coverage for the new FPS module loader path or document why automated coverage is deferred.

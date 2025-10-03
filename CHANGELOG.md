@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T03:45:00Z
+- fix: complete step [p1] Replace the FPS importmap with explicit Three.js module URLs so blocked importmaps no longer break the controls panel.
+- fix: complete step [p1] Point the FPS sample asset loader at `./dozenSidedStack-Body.x3d` so the sample import succeeds on hosted builds.
+- fix: complete step [p1] Add a resnapAll helper so changing the snap grid re-aligns existing survey geometry before re-rendering.
+
 ## 2025-10-03T02:20:00Z
 - fix: complete step [p1] Trace why the FPS viewer walk/reset buttons stalled by surfacing pointer-lock failures, disabling walk mode when unsupported, and updating the HUD messaging.
 - fix: complete step [p1] Restore the first-person camera anchor by clearing move state on layout loads, pointer-lock unlocks, and resets so the scene stops drifting toward the viewer.

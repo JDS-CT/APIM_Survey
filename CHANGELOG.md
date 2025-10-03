@@ -1,5 +1,16 @@
 # Changelog
 
+## 2025-10-03T21:50:07Z
+- feat: Implemented cable bend insertion/removal and draggable bend handles in the 2D survey so multi-segment Bézier routes can be authored.
+- feat: Taught the FPV demo to honor persisted bend points by sampling chained cubic segments when generating tube geometry and lengths.
+- test: Added frontend markup assertions covering the new cable bend controls and handler functions.
+
+## 2025-10-03T21:39:02Z
+- feat: Stand up a shared cable catalog and extend layout persistence so cables serialize with endpoints, bend points, and status.
+- feat: Add 2D survey socket overlays with Bézier cable creation, draggable handles, and length validation UI.
+- feat: Render FPV cable tubes in Three.js using shared metadata and update statuses after layout changes.
+- test: Extend frontend markup coverage to assert cable catalog wiring and layout snapshot fields for cables.
+
 ## 2025-10-03T18:57:17Z
 - docs: complete step [p1] Document curved cable connection prototypes covering Bézier and physics-driven approaches with bounding-box socket registration.
 - docs: complete step [p1] Outline cable metadata schema updates so sockets declare allowed cable types for validation across survey and FPV views.

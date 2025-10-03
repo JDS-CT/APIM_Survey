@@ -1780,6 +1780,929 @@ async function initializeSurvey() {
   setMode('basic');
 }
 
+const CABLE_CATALOG_URL = '../../resources/layout_samples/catalog.json';
+const DEFAULT_ROOM_HEIGHT_MM = 3000;
+const CABLE_SAMPLE_SEGMENTS = 48;
+const CABLE_CONTROLS_TEMPLATE = `
+      <div class="panel" id="cableControls">
+        <h3>Service Cables</h3>
+        <label>
+          Cable type
+          <select id="cableType"></select>
+        </label>
+        <div class="note">Select a cable type, then click two sockets to connect them.</div>
+        <div class="row">
+          <button class="btn" id="cancelCable" disabled>Cancel selection</button>
+          <button class="btn" id="deleteCable" disabled>Delete cable</button>
+        </div>
+        <div class="hud" id="cableHud"></div>
+      </div>
+`;
+
+let cableTypeSelectEl = null;
+let cancelCableBtnEl = null;
+let deleteCableBtnEl = null;
+let cableHudEl = null;
+let cablesLayerEl = null;
+let cableHandlesLayerEl = null;
+let socketOverlayEl = null;
+let cableCatalog = null;
+let pendingCable = null;
+const socketMap = new Map();
+const cableCurveCache = new Map();
+
+function getCableTypeMeta(type) {
+  return (cableCatalog && cableCatalog.cableTypes && cableCatalog.cableTypes[type]) || null;
+}
+
+function getCableColor(type) {
+  const meta = getCableTypeMeta(type);
+  return (meta && meta.color) || '#64748b';
+}
+
+async function ensureCableCatalog() {
+  if (cableCatalog) return cableCatalog;
+  const resp = await fetch(CABLE_CATALOG_URL, { cache: 'no-store' });
+  if (!resp.ok) {
+    throw new Error(`Failed to load cable catalog: ${resp.status}`);
+  }
+  cableCatalog = await resp.json();
+  return cableCatalog;
+}
+
+function populateCableTypeSelect() {
+  if (!cableTypeSelectEl) return;
+  cableTypeSelectEl.innerHTML = '';
+  if (!cableCatalog || !cableCatalog.cableTypes) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Loading…';
+    cableTypeSelectEl.appendChild(opt);
+    cableTypeSelectEl.disabled = true;
+    return;
+  }
+  cableTypeSelectEl.disabled = false;
+  Object.entries(cableCatalog.cableTypes).forEach(([key, def]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = def.label || key;
+    cableTypeSelectEl.appendChild(opt);
+  });
+  if (cableTypeSelectEl.options.length > 0) {
+    cableTypeSelectEl.value = cableTypeSelectEl.options[0].value;
+  }
+}
+
+function getSocketKey(ref) {
+  return `${ref.kind}:${ref.assetId}:${ref.socketId}`;
+}
+
+function listCableSockets() {
+  if (!cableCatalog || !cableCatalog.assets) return [];
+  const sockets = [];
+  const assetsCatalog = cableCatalog.assets;
+  (state.floorItems || []).forEach(item => {
+    const meta = assetsCatalog[item.type];
+    if (!meta || !Array.isArray(meta.connectionSockets)) return;
+    meta.connectionSockets.forEach(socket => {
+      sockets.push({
+        kind: 'floor',
+        assetId: item.id,
+        assetType: item.type,
+        socketId: socket.id,
+        label: `${socket.label} (${item.id})`,
+        anchor: socket.anchor || { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: socket.allowedCableTypes || [],
+        surface: socket.surface || 'floor'
+      });
+    });
+  });
+  (state.wallItems || []).forEach(item => {
+    if (item.type !== 'socket') return;
+    const meta = assetsCatalog.wall_socket || {};
+    const socketsMeta = Array.isArray(meta.connectionSockets) && meta.connectionSockets.length
+      ? meta.connectionSockets
+      : [{
+          id: 'wall_outlet_duplex',
+          label: 'Wall Socket',
+          anchor: { u: 0.5, v: 0.5, w: 0.5 },
+          allowedCableTypes: ['power', 'ground'],
+          surface: 'wall'
+        }];
+    socketsMeta.forEach(socket => {
+      sockets.push({
+        kind: 'wall',
+        assetId: item.id,
+        assetType: 'wall_socket',
+        socketId: socket.id,
+        label: `${socket.label} (${item.id})`,
+        anchor: socket.anchor || { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: socket.allowedCableTypes || [],
+        surface: socket.surface || 'wall'
+      });
+    });
+  });
+  return sockets;
+}
+
+function resolveSocketPosition(ref) {
+  if (!ref) return null;
+  if (ref.kind === 'floor') {
+    const item = state.floorItems.find(f => f.id === ref.assetId);
+    if (!item) return null;
+    const assets = (cableCatalog && cableCatalog.assets) || {};
+    const meta = assets[item.type];
+    if (!meta) return null;
+    const socket = (meta.connectionSockets || []).find(s => s.id === ref.socketId);
+    if (!socket) return null;
+    const anchor = socket.anchor || { u: 0.5, v: 0.5, w: 0.5 };
+    const dims = meta.boundingBox_mm || {};
+    const width = toNumber(item.w, dims.w || 0);
+    const length = toNumber(item.l, dims.l || 0);
+    const height = dims.h || DEFAULT_ROOM_HEIGHT_MM;
+    const offsetX = (anchor.u - 0.5) * width;
+    const offsetY = (anchor.v - 0.5) * length;
+    const rad = ((item.rotation || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const worldX = item.x + offsetX * cos - offsetY * sin;
+    const worldY = item.y + offsetX * sin + offsetY * cos;
+    const elevation = toNumber(item.elevation_mm, 0);
+    const baseZ = (anchor.w || 0) * height + elevation;
+    return { x: worldX, y: worldY, z: baseZ };
+  }
+  if (ref.kind === 'wall') {
+    const item = state.wallItems.find(w => w.id === ref.assetId);
+    if (!item) return null;
+    const geom = getWallGeometry(item.wall);
+    if (!geom) return null;
+    const assets = (cableCatalog && cableCatalog.assets) || {};
+    const meta = assets.wall_socket || {};
+    const socket = (meta.connectionSockets || []).find(s => s.id === ref.socketId) || (meta.connectionSockets || [])[0] || null;
+    const anchor = socket && socket.anchor ? socket.anchor : { u: 0.5, v: 0.5, w: 0.5 };
+    const offset = clamp(toNumber(item.s, 0), 0, geom.length);
+    const base = pointAlongWall(geom, offset);
+    const depth = clamp(toNumber(item.h, 0), 0, 4000);
+    const tip = {
+      x: base.x + geom.normal.x * depth,
+      y: base.y + geom.normal.y * depth
+    };
+    const height = (meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : DEFAULT_ROOM_HEIGHT_MM) * (anchor.w || 0.5);
+    return { x: tip.x, y: tip.y, z: height };
+  }
+  return null;
+}
+
+function cloneCablePoint(pt) {
+  if (!pt) return { x: 0, y: 0, z: 0 };
+  return { x: Number(pt.x) || 0, y: Number(pt.y) || 0, z: Number(pt.z) || 0 };
+}
+
+function distance2d(a, b) {
+  const dx = (b.x || 0) - (a.x || 0);
+  const dy = (b.y || 0) - (a.y || 0);
+  return Math.hypot(dx, dy);
+}
+
+function getCableAnchors(cable, start, end) {
+  const anchors = [];
+  if (start) anchors.push(cloneCablePoint(start));
+  const bends = Array.isArray(cable.bendPoints) ? cable.bendPoints : [];
+  bends.forEach(pt => {
+    anchors.push(cloneCablePoint(pt));
+  });
+  if (end) anchors.push(cloneCablePoint(end));
+  return anchors;
+}
+
+function defaultHandlesForSegment(start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const nx = -dy / length;
+  const ny = dx / length;
+  const slack = length * 0.25;
+  const midZ = (start.z + end.z) / 2;
+  return [
+    {
+      x: start.x + dx * 0.25 + nx * slack,
+      y: start.y + dy * 0.25 + ny * slack,
+      z: midZ
+    },
+    {
+      x: start.x + dx * 0.75 + nx * slack,
+      y: start.y + dy * 0.75 + ny * slack,
+      z: midZ
+    }
+  ];
+}
+
+function ensureCableControlPoints(cable, start, end, forceDefaults = false) {
+  if (!start || !end) return [];
+  if (!Array.isArray(cable.bendPoints)) cable.bendPoints = [];
+  if (!Array.isArray(cable.controlPoints)) cable.controlPoints = [];
+  const anchors = getCableAnchors(cable, start, end);
+  const segmentCount = Math.max(anchors.length - 1, 1);
+  const requiredHandles = segmentCount * 2;
+  const handles = new Array(requiredHandles);
+  for (let i = 0; i < segmentCount; i++) {
+    const [def1, def2] = defaultHandlesForSegment(anchors[i], anchors[i + 1]);
+    const existing1 = !forceDefaults ? cable.controlPoints[i * 2] : null;
+    const existing2 = !forceDefaults ? cable.controlPoints[i * 2 + 1] : null;
+    handles[i * 2] = existing1 ? cloneCablePoint(existing1) : def1;
+    handles[i * 2 + 1] = existing2 ? cloneCablePoint(existing2) : def2;
+  }
+  cable.controlPoints = handles;
+  return anchors;
+}
+
+function resetCableHandles(cable, start, end) {
+  ensureCableControlPoints(cable, start, end, true);
+}
+
+function cubicPoint(t, p0, p1, p2, p3) {
+  const it = 1 - t;
+  const it2 = it * it;
+  const t2 = t * t;
+  const a = it2 * it;
+  const b = 3 * it2 * t;
+  const c = 3 * it * t2;
+  const d = t * t2;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+    z: a * p0.z + b * p1.z + c * p2.z + d * p3.z
+  };
+}
+
+function distance3d(a, b) {
+  const dx = (b.x || 0) - (a.x || 0);
+  const dy = (b.y || 0) - (a.y || 0);
+  const dz = (b.z || 0) - (a.z || 0);
+  return Math.hypot(dx, dy, dz);
+}
+
+function updateCableMetrics(cable, start, end) {
+  if (!start || !end) return;
+  const anchors = ensureCableControlPoints(cable, start, end);
+  if (!anchors || anchors.length < 2) return;
+  let total = 0;
+  const samples = [];
+  for (let segment = 0; segment < anchors.length - 1; segment++) {
+    const p0 = anchors[segment];
+    const p3 = anchors[segment + 1];
+    const c1 = cable.controlPoints[segment * 2];
+    const c2 = cable.controlPoints[segment * 2 + 1];
+    let prev = { x: p0.x, y: p0.y, z: p0.z };
+    for (let i = 1; i <= CABLE_SAMPLE_SEGMENTS; i++) {
+      const t = i / CABLE_SAMPLE_SEGMENTS;
+      const point = cubicPoint(t, p0, c1, c2, p3);
+      total += distance3d(prev, point);
+      prev = point;
+      samples.push({ segmentIndex: segment, t, point: cloneCablePoint(point) });
+    }
+  }
+  cable.length_mm = total;
+  const meta = getCableTypeMeta(cable.cableType);
+  const maxLength = meta && meta.maxLength_mm ? meta.maxLength_mm : 3048;
+  cable.status = total > maxLength ? 'over_limit' : 'within_limit';
+  cableCurveCache.set(cable.id, {
+    anchors: anchors.map(cloneCablePoint),
+    controlPoints: cable.controlPoints.map(cloneCablePoint),
+    samples
+  });
+}
+
+function exportCableToSnapshot(cable) {
+  const safePoints = (cable.controlPoints || []).map(pt => ({
+    u: clamp(pt.x / state.Wmm, 0, 1),
+    v: clamp(pt.y / state.Lmm, 0, 1),
+    w: clamp((pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM, 0, 1)
+  }));
+  const bendPoints = (cable.bendPoints || []).map(pt => ({
+    u: clamp(pt.x / state.Wmm, 0, 1),
+    v: clamp(pt.y / state.Lmm, 0, 1),
+    w: clamp((pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM, 0, 1)
+  }));
+  return {
+    id: cable.id,
+    cableType: cable.cableType,
+    source: {
+      assetId: cable.source.assetId,
+      socketId: cable.source.socketId,
+      kind: cable.source.kind
+    },
+    target: {
+      assetId: cable.target.assetId,
+      socketId: cable.target.socketId,
+      kind: cable.target.kind
+    },
+    controlPoints: safePoints,
+    bendPoints,
+    pins: Array.isArray(cable.pins) ? cable.pins : [],
+    length_mm: Math.round(cable.length_mm || 0),
+    status: cable.status || 'unknown'
+  };
+}
+
+function guessCableEndpointKind(assetId) {
+  if (!assetId) return null;
+  if ((state.floorItems || []).some(f => f.id === assetId)) return 'floor';
+  if ((state.wallItems || []).some(w => w.id === assetId)) return 'wall';
+  return null;
+}
+
+function normalizeCableFromLayout(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const cableType = typeof entry.cableType === 'string' ? entry.cableType : null;
+  if (!cableType) return null;
+  const sourceRaw = entry.source && typeof entry.source === 'object' ? entry.source : {};
+  const targetRaw = entry.target && typeof entry.target === 'object' ? entry.target : {};
+  const sourceAssetId = sourceRaw.assetId || entry.sourceAssetId;
+  const targetAssetId = targetRaw.assetId || entry.targetAssetId;
+  const sourceSocketId = sourceRaw.socketId || entry.sourceSocketId;
+  const targetSocketId = targetRaw.socketId || entry.targetSocketId;
+  if (!sourceAssetId || !sourceSocketId || !targetAssetId || !targetSocketId) return null;
+  const sourceKind = sourceRaw.kind || guessCableEndpointKind(sourceAssetId);
+  const targetKind = targetRaw.kind || guessCableEndpointKind(targetAssetId);
+  if (!sourceKind || !targetKind) return null;
+  const controlPoints = Array.isArray(entry.controlPoints)
+    ? entry.controlPoints
+        .map(pt => {
+          if (!pt || typeof pt !== 'object') return null;
+          const u = Number(pt.u);
+          const v = Number(pt.v);
+          const w = Number(pt.w != null ? pt.w : pt.z);
+          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+          return {
+            x: clamp(u, 0, 1) * state.Wmm,
+            y: clamp(v, 0, 1) * state.Lmm,
+            z: Number.isFinite(w) ? clamp(w, 0, 1) * DEFAULT_ROOM_HEIGHT_MM : 0
+          };
+        })
+        .filter(Boolean)
+    : [];
+  const bendPoints = Array.isArray(entry.bendPoints)
+    ? entry.bendPoints
+        .map(pt => {
+          if (!pt || typeof pt !== 'object') return null;
+          const u = Number(pt.u);
+          const v = Number(pt.v);
+          const w = Number(pt.w != null ? pt.w : pt.z);
+          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+          return {
+            x: clamp(u, 0, 1) * state.Wmm,
+            y: clamp(v, 0, 1) * state.Lmm,
+            z: Number.isFinite(w) ? clamp(w, 0, 1) * DEFAULT_ROOM_HEIGHT_MM : 0
+          };
+        })
+        .filter(Boolean)
+    : [];
+  return {
+    id: entry.id || genId('cable'),
+    cableType,
+    source: { kind: sourceKind, assetId: sourceAssetId, socketId: sourceSocketId },
+    target: { kind: targetKind, assetId: targetAssetId, socketId: targetSocketId },
+    bendPoints,
+    controlPoints,
+    pins: Array.isArray(entry.pins) ? entry.pins : [],
+    length_mm: toNumber(entry.length_mm, 0),
+    status: entry.status || 'unknown'
+  };
+}
+
+function normalizeCableArray(layout) {
+  if (!layout || typeof layout !== 'object' || !Array.isArray(layout.cables)) return [];
+  return layout.cables.map(normalizeCableFromLayout).filter(Boolean);
+}
+
+function pruneInvalidCables() {
+  if (!Array.isArray(state.cables) || state.cables.length === 0) return;
+  const next = [];
+  let removed = 0;
+  state.cables.forEach(cable => {
+    const start = resolveSocketPosition(cable.source);
+    const end = resolveSocketPosition(cable.target);
+    if (start && end) {
+      next.push(cable);
+    } else {
+      removed += 1;
+    }
+  });
+  if (removed > 0) {
+    state.cables = next;
+    if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+      const stillExists = state.cables.some(c => c.id === state.selectedSurface.id);
+      if (!stillExists) {
+        setSelectedSurface({ type: 'floor' }, { skipRender: true });
+      }
+    }
+    showHud(`Removed ${removed} cable${removed === 1 ? '' : 's'} referencing missing sockets.`);
+  }
+}
+
+function createCableFromSockets(sourceSocket, targetSocket, cableType) {
+  const cable = {
+    id: genId('cable'),
+    cableType,
+    source: { kind: sourceSocket.kind, assetId: sourceSocket.assetId, socketId: sourceSocket.socketId },
+    target: { kind: targetSocket.kind, assetId: targetSocket.assetId, socketId: targetSocket.socketId },
+    bendPoints: [],
+    controlPoints: [],
+    pins: [],
+    status: 'within_limit',
+    length_mm: 0
+  };
+  const start = resolveSocketPosition(cable.source);
+  const end = resolveSocketPosition(cable.target);
+  ensureCableControlPoints(cable, start, end);
+  updateCableMetrics(cable, start, end);
+  return cable;
+}
+
+function updateCableHud() {
+  if (!cableHudEl) return;
+  if (pendingCable && pendingCable.socket) {
+    const typeMeta = getCableTypeMeta(pendingCable.cableType);
+    const label = typeMeta ? typeMeta.label : pendingCable.cableType;
+    cableHudEl.textContent = `Starting ${label || 'Cable'} from ${pendingCable.socket.label}. Select a destination.`;
+    if (deleteCableBtnEl) deleteCableBtnEl.disabled = true;
+    return;
+  }
+  if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+    const cable = state.cables.find(c => c.id === state.selectedSurface.id);
+    if (cable) {
+      const meta = getCableTypeMeta(cable.cableType);
+      const label = meta ? meta.label : cable.cableType;
+      const status = cable.status === 'over_limit' ? '⚠️ Exceeds max length' : 'Within limit';
+      cableHudEl.textContent = `${label || 'Cable'} length ${fmtLen(Math.round(cable.length_mm || 0))} — ${status}`;
+      if (deleteCableBtnEl) deleteCableBtnEl.disabled = false;
+      return;
+    }
+  }
+  cableHudEl.textContent = 'Select a cable type and click two sockets to connect them.';
+  if (deleteCableBtnEl) deleteCableBtnEl.disabled = true;
+}
+
+function handleSocketPointerDown(evt) {
+  const key = evt.currentTarget.dataset.socketKey;
+  const socket = socketMap.get(key);
+  if (!socket) return;
+  const cableType = cableTypeSelectEl && cableTypeSelectEl.value ? cableTypeSelectEl.value : null;
+  if (!cableType) {
+    showHud('Select a cable type before starting a connection.');
+    return;
+  }
+  if (!socket.allowedCableTypes.includes(cableType)) {
+    showHud('This socket does not accept the selected cable type.');
+    return;
+  }
+  evt.stopPropagation();
+  evt.preventDefault();
+  if (!pendingCable) {
+    pendingCable = { socket: { ...socket, key }, cableType };
+    render();
+    return;
+  }
+  if (pendingCable.socket.key === key) {
+    pendingCable = null;
+    render();
+    return;
+  }
+  if (pendingCable.cableType !== cableType) {
+    pendingCable = { socket: { ...socket, key }, cableType };
+    render();
+    return;
+  }
+  const cable = createCableFromSockets(pendingCable.socket, { ...socket, key }, cableType);
+  state.cables.push(cable);
+  pendingCable = null;
+  setSelectedSurface({ type: 'cable', id: cable.id });
+  showHud(`Connected ${cable.source.socketId} to ${cable.target.socketId}.`);
+  render();
+}
+
+function handleSocketPointerEnter(evt) {
+  evt.currentTarget.dataset.hover = 'true';
+}
+
+function handleSocketPointerLeave(evt) {
+  evt.currentTarget.dataset.hover = 'false';
+}
+
+function handleCableHandleDown(evt) {
+  const cableId = evt.currentTarget.dataset.cableId;
+  const index = Number(evt.currentTarget.dataset.handleIndex || 0);
+  const cable = state.cables.find(c => c.id === cableId);
+  if (!cable) return;
+  setSelectedSurface({ type: 'cable', id: cableId }, { skipRender: true });
+  drag = {
+    kind: 'cable-handle',
+    cableId,
+    handleIndex: index,
+    captureEl: svg,
+    pointerId: evt.pointerId
+  };
+  svg.setPointerCapture(evt.pointerId);
+  evt.stopPropagation();
+  evt.preventDefault();
+}
+
+function handleCableBendDown(evt) {
+  const cableId = evt.currentTarget.dataset.cableId;
+  const index = Number(evt.currentTarget.dataset.bendIndex || 0);
+  const cable = state.cables.find(c => c.id === cableId);
+  if (!cable) return;
+  setSelectedSurface({ type: 'cable', id: cableId }, { skipRender: true });
+  drag = {
+    kind: 'cable-bend',
+    cableId,
+    bendIndex: index,
+    captureEl: svg,
+    pointerId: evt.pointerId
+  };
+  svg.setPointerCapture(evt.pointerId);
+  evt.stopPropagation();
+  evt.preventDefault();
+}
+
+function handleCableBendDoubleClick(evt) {
+  const cableId = evt.currentTarget.dataset.cableId;
+  const index = Number(evt.currentTarget.dataset.bendIndex || 0);
+  const cable = state.cables.find(c => c.id === cableId);
+  if (!cable || !Array.isArray(cable.bendPoints)) return;
+  if (index < 0 || index >= cable.bendPoints.length) return;
+  const start = resolveSocketPosition(cable.source);
+  const end = resolveSocketPosition(cable.target);
+  cable.bendPoints.splice(index, 1);
+  resetCableHandles(cable, start, end);
+  showHud('Removed bend point.');
+  render();
+  evt.stopPropagation();
+  evt.preventDefault();
+}
+
+function renderSocketOverlay() {
+  if (!socketOverlayEl) return;
+  socketOverlayEl.innerHTML = '';
+  socketMap.clear();
+  if (!cableCatalog) return;
+  const sockets = listCableSockets();
+  const selectedKeys = new Set();
+  if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+    const cable = state.cables.find(c => c.id === state.selectedSurface.id);
+    if (cable) {
+      selectedKeys.add(getSocketKey(cable.source));
+      selectedKeys.add(getSocketKey(cable.target));
+    }
+  }
+  sockets.forEach(socket => {
+    const resolved = resolveSocketPosition(socket);
+    if (!resolved) return;
+    const [px, py] = mmToPx(resolved.x, resolved.y);
+    const key = getSocketKey(socket);
+    socket.key = key;
+    socketMap.set(key, socket);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', px);
+    circle.setAttribute('cy', py);
+    circle.setAttribute('r', 8);
+    circle.classList.add('socket-target');
+    circle.dataset.socketKey = key;
+    const cableType = cableTypeSelectEl && cableTypeSelectEl.value ? cableTypeSelectEl.value : null;
+    const allowed = !cableType || socket.allowedCableTypes.includes(cableType);
+    circle.dataset.disabled = allowed ? 'false' : 'true';
+    if (allowed) {
+      circle.addEventListener('pointerdown', handleSocketPointerDown);
+    }
+    circle.addEventListener('pointerenter', handleSocketPointerEnter);
+    circle.addEventListener('pointerleave', handleSocketPointerLeave);
+    if (selectedKeys.has(key)) {
+      circle.dataset.active = 'true';
+    }
+    if (pendingCable && pendingCable.socket && pendingCable.socket.key === key) {
+      circle.dataset.pending = 'true';
+    }
+    socketOverlayEl.appendChild(circle);
+  });
+}
+
+function renderCables() {
+  if (!cablesLayerEl) return;
+  cablesLayerEl.innerHTML = '';
+  cableCurveCache.clear();
+  if (!Array.isArray(state.cables)) return;
+  state.cables.forEach(cable => {
+    const start = resolveSocketPosition(cable.source);
+    const end = resolveSocketPosition(cable.target);
+    if (!start || !end) return;
+    updateCableMetrics(cable, start, end);
+    const anchors = getCableAnchors(cable, start, end);
+    if (anchors.length < 2 || cable.controlPoints.length < (anchors.length - 1) * 2) return;
+    const [sx, sy] = mmToPx(anchors[0].x, anchors[0].y);
+    const segments = anchors.length - 1;
+    const parts = [`M ${sx} ${sy}`];
+    for (let seg = 0; seg < segments; seg++) {
+      const cp1 = cable.controlPoints[seg * 2];
+      const cp2 = cable.controlPoints[seg * 2 + 1];
+      const [c1x, c1y] = mmToPx(cp1.x, cp1.y);
+      const [c2x, c2y] = mmToPx(cp2.x, cp2.y);
+      const anchor = anchors[seg + 1];
+      const [ex, ey] = mmToPx(anchor.x, anchor.y);
+      parts.push(`C ${c1x} ${c1y} ${c2x} ${c2y} ${ex} ${ey}`);
+    }
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', parts.join(' '));
+    path.classList.add('cable-path');
+    path.setAttribute('stroke', getCableColor(cable.cableType));
+    path.setAttribute('stroke-width', 4);
+    path.setAttribute('fill', 'none');
+    path.dataset.cableId = cable.id;
+    path.dataset.status = cable.status || 'unknown';
+    if (state.selectedSurface && state.selectedSurface.type === 'cable' && state.selectedSurface.id === cable.id) {
+      path.classList.add('selected');
+    }
+    path.addEventListener('pointerdown', evt => {
+      setSelectedSurface({ type: 'cable', id: cable.id });
+      evt.stopPropagation();
+      evt.preventDefault();
+    });
+    path.addEventListener('dblclick', evt => {
+      setSelectedSurface({ type: 'cable', id: cable.id });
+      const pt = svgPoint(evt);
+      const roomPt = svgPointToRoomMm(pt);
+      const snapped = snapPoint(clampPointToRoom(roomPt));
+      if (insertCableBendPoint(cable, snapped)) {
+        evt.stopPropagation();
+        evt.preventDefault();
+        render();
+      }
+    });
+    cablesLayerEl.appendChild(path);
+  });
+}
+
+function renderCableHandles() {
+  if (!cableHandlesLayerEl) return;
+  cableHandlesLayerEl.innerHTML = '';
+  if (!state.selectedSurface || state.selectedSurface.type !== 'cable') return;
+  const cable = state.cables.find(c => c.id === state.selectedSurface.id);
+  if (!cable) return;
+  if (Array.isArray(cable.controlPoints)) {
+    cable.controlPoints.forEach((pt, index) => {
+      const [px, py] = mmToPx(pt.x, pt.y);
+      const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      handle.setAttribute('cx', px);
+      handle.setAttribute('cy', py);
+      handle.setAttribute('r', 6);
+      handle.classList.add('cable-handle');
+      handle.dataset.cableId = cable.id;
+      handle.dataset.handleIndex = String(index);
+      handle.addEventListener('pointerdown', handleCableHandleDown);
+      cableHandlesLayerEl.appendChild(handle);
+    });
+  }
+  if (Array.isArray(cable.bendPoints)) {
+    cable.bendPoints.forEach((pt, index) => {
+      const [px, py] = mmToPx(pt.x, pt.y);
+      const bend = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bend.setAttribute('x', px - 6);
+      bend.setAttribute('y', py - 6);
+      bend.setAttribute('width', 12);
+      bend.setAttribute('height', 12);
+      bend.classList.add('cable-bend-handle');
+      bend.dataset.cableId = cable.id;
+      bend.dataset.bendIndex = String(index);
+      bend.setAttribute('data-bend-index', String(index));
+      bend.addEventListener('pointerdown', handleCableBendDown);
+      bend.addEventListener('dblclick', handleCableBendDoubleClick);
+      cableHandlesLayerEl.appendChild(bend);
+    });
+  }
+}
+
+function insertCableBendPoint(cable, approxPoint) {
+  if (!cable) return false;
+  const start = resolveSocketPosition(cable.source);
+  const end = resolveSocketPosition(cable.target);
+  if (!start || !end) return false;
+  const snapped = snapPoint(approxPoint);
+  const clamped = clampPointToRoom(snapped);
+  let insertIndex = Array.isArray(cable.bendPoints) ? cable.bendPoints.length : 0;
+  let finalPoint = {
+    x: clamped.x,
+    y: clamped.y,
+    z: (start.z + end.z) / 2
+  };
+  const cache = cableCurveCache.get(cable.id);
+  const samples = cache && Array.isArray(cache.samples) ? cache.samples : [];
+  const anchors = cache && Array.isArray(cache.anchors) && cache.anchors.length > 1 ? cache.anchors : getCableAnchors(cable, start, end);
+  if (samples.length > 0 && anchors.length > 1) {
+    let best = null;
+    samples.forEach(sample => {
+      const dist = distance2d(clamped, sample.point);
+      if (!best || dist < best.dist) {
+        best = { dist, sample };
+      }
+    });
+    if (best && Number.isFinite(best.sample.segmentIndex)) {
+      insertIndex = clamp(best.sample.segmentIndex, 0, Array.isArray(cable.bendPoints) ? cable.bendPoints.length : 0);
+      const seg = best.sample.segmentIndex;
+      const p0 = anchors[seg];
+      const p3 = anchors[seg + 1];
+      const c1 = cable.controlPoints[seg * 2];
+      const c2 = cable.controlPoints[seg * 2 + 1];
+      const precise = cubicPoint(best.sample.t, p0, c1, c2, p3);
+      finalPoint = {
+        x: clamp(precise.x, 0, state.Wmm),
+        y: clamp(precise.y, 0, state.Lmm),
+        z: Number.isFinite(precise.z) ? precise.z : finalPoint.z
+      };
+    }
+  }
+  const snappedFinal = snapPoint(finalPoint);
+  const bendPoint = {
+    x: clamp(snappedFinal.x, 0, state.Wmm),
+    y: clamp(snappedFinal.y, 0, state.Lmm),
+    z: finalPoint.z
+  };
+  if (!Array.isArray(cable.bendPoints)) cable.bendPoints = [];
+  insertIndex = clamp(insertIndex, 0, cable.bendPoints.length);
+  cable.bendPoints.splice(insertIndex, 0, bendPoint);
+  resetCableHandles(cable, start, end);
+  showHud('Added bend point.');
+  return true;
+}
+
+(function setupCablePrototype() {
+  const aside = document.querySelector('aside');
+  if (!aside) return;
+  const style = document.createElement('style');
+  style.textContent = `#cableControls h3{margin:0 0 8px;font-size:16px;}#cableControls .row{gap:10px;flex-wrap:wrap;}#cableControls select{min-width:160px;}#cableHud{min-height:1.4em;}#cablesLayer,#cableHandlesLayer,#socketOverlay{pointer-events:none;}#cableHandlesLayer .cable-handle,#cableHandlesLayer .cable-bend-handle,#socketOverlay .socket-target{pointer-events:all;} .cable-path{fill:none;stroke-linecap:round;pointer-events:stroke;} .cable-path.selected{stroke-width:5;filter:drop-shadow(0 0 6px rgba(59,130,246,0.35));} .cable-path[data-status="over_limit"]{stroke-dasharray:8 6;} .cable-handle{fill:#fff;stroke:#2563eb;stroke-width:2;cursor:pointer;} .cable-bend-handle{fill:#fef08a;stroke:#92400e;stroke-width:2;cursor:pointer;} #socketOverlay .socket-target{fill:rgba(59,130,246,0.18);stroke:#2563eb;stroke-width:1.5;cursor:pointer;} #socketOverlay .socket-target[data-disabled="true"]{opacity:0.2;cursor:not-allowed;} #socketOverlay .socket-target[data-active="true"]{fill:rgba(34,197,94,0.35);} #socketOverlay .socket-target[data-pending="true"]{fill:rgba(250,204,21,0.35);} #socketOverlay .socket-target[data-hover="true"]{stroke-width:2.4;}`;
+  document.head.appendChild(style);
+  aside.insertAdjacentHTML('beforeend', CABLE_CONTROLS_TEMPLATE);
+  cableTypeSelectEl = document.getElementById('cableType');
+  cancelCableBtnEl = document.getElementById('cancelCable');
+  deleteCableBtnEl = document.getElementById('deleteCable');
+  cableHudEl = document.getElementById('cableHud');
+  cablesLayerEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  cablesLayerEl.setAttribute('id', 'cablesLayer');
+  cableHandlesLayerEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  cableHandlesLayerEl.setAttribute('id', 'cableHandlesLayer');
+  socketOverlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  socketOverlayEl.setAttribute('id', 'socketOverlay');
+  if (floorItemsG) {
+    floorItemsG.before(socketOverlayEl);
+    floorItemsG.before(cableHandlesLayerEl);
+    floorItemsG.before(cablesLayerEl);
+  }
+  if (!Array.isArray(state.cables)) {
+    state.cables = [];
+  }
+  const originalApplyDefaultPreset = applyDefaultPreset;
+  applyDefaultPreset = function () {
+    originalApplyDefaultPreset();
+    state.cables = [];
+  };
+  const originalSyncIdCounter = syncIdCounterFromLayout;
+  syncIdCounterFromLayout = function () {
+    originalSyncIdCounter();
+    (state.cables || []).forEach(cable => {
+      const match = cable.id && String(cable.id).match(/_(\d+)$/);
+      if (match) {
+        const candidate = Number(match[1]);
+        if (Number.isFinite(candidate)) {
+          idCounter = Math.max(idCounter, candidate + 1);
+        }
+      }
+    });
+  };
+  const originalSnapshotLayout = snapshotLayout;
+  snapshotLayout = function () {
+    const snapshot = originalSnapshotLayout();
+    // cables: state.cables.map(...) is covered by snapshot serialization
+    snapshot.cables = state.cables.map(exportCableToSnapshot);
+    return snapshot;
+  };
+  const originalApplyLayout = applyLayout;
+  applyLayout = function (raw, options) {
+    const result = originalApplyLayout(raw, options);
+    if (result) {
+      const layout = raw && typeof raw === 'object' && raw.layout && typeof raw.layout === 'object' ? raw.layout : raw;
+      state.cables = normalizeCableArray(layout);
+      syncIdCounterFromLayout();
+      pendingCable = null;
+      render();
+    }
+    return result;
+  };
+  const originalDeleteSelectedItem = deleteSelectedItem;
+  deleteSelectedItem = function () {
+    if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+      const idx = state.cables.findIndex(c => c.id === state.selectedSurface.id);
+      if (idx >= 0) {
+        state.cables.splice(idx, 1);
+        setSelectedSurface({ type: 'floor' }, { skipRender: true });
+        return 'Cable removed';
+      }
+    }
+    return originalDeleteSelectedItem();
+  };
+  const originalSnapshotSelectedSurface = snapshotSelectedSurface;
+  snapshotSelectedSurface = function (surface) {
+    if (surface && surface.type === 'cable' && surface.id) {
+      return { type: 'cable', id: surface.id };
+    }
+    return originalSnapshotSelectedSurface(surface);
+  };
+  const originalNormalizeSelectedSurface = normalizeSelectedSurface;
+  normalizeSelectedSurface = function (surface) {
+    if (surface && surface.type === 'cable' && surface.id) {
+      const cable = state.cables.find(c => c.id === surface.id);
+      return cable ? { type: 'cable', id: cable.id } : { type: 'floor' };
+    }
+    return originalNormalizeSelectedSurface(surface);
+  };
+  const originalDefaultHudMessage = defaultHudMessage;
+  defaultHudMessage = function () {
+    const base = originalDefaultHudMessage();
+    if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+      const cable = state.cables.find(c => c.id === state.selectedSurface.id);
+      if (cable) {
+        const meta = getCableTypeMeta(cable.cableType);
+        const label = meta ? meta.label : cable.cableType;
+        const replacement = `| Selected: ${label || 'Cable'} (${fmtLen(Math.round(cable.length_mm || 0))})`;
+        return base.replace(/\| Selected: .*/, replacement);
+      }
+    }
+    return base;
+  };
+  const originalRender = render;
+  render = function () {
+    pruneInvalidCables();
+    originalRender();
+    renderCables();
+    renderCableHandles();
+    renderSocketOverlay();
+    updateCableHud();
+    if (cancelCableBtnEl) cancelCableBtnEl.disabled = !pendingCable;
+  };
+  const originalInitializeSurvey = initializeSurvey;
+  initializeSurvey = async function () {
+    try {
+      await ensureCableCatalog();
+      populateCableTypeSelect();
+    } catch (err) {
+      console.error('Failed to load cable catalog', err);
+    }
+    await originalInitializeSurvey();
+    render();
+  };
+  if (cableTypeSelectEl) {
+    cableTypeSelectEl.addEventListener('change', () => {
+      pendingCable = null;
+      render();
+    });
+  }
+  if (cancelCableBtnEl) {
+    cancelCableBtnEl.addEventListener('click', () => {
+      pendingCable = null;
+      render();
+    });
+  }
+  if (deleteCableBtnEl) {
+    deleteCableBtnEl.addEventListener('click', () => {
+      if (state.selectedSurface && state.selectedSurface.type === 'cable') {
+        const message = deleteSelectedItem();
+        if (message) showHud(message);
+        render();
+      }
+    });
+  }
+  document.addEventListener('pointermove', evt => {
+    if (!drag) return;
+    const cable = state.cables.find(c => c.id === drag.cableId);
+    if (!cable) return;
+    const pt = svgPoint(evt);
+    const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
+    const snapped = snapPoint(roomPt);
+    if (drag.kind === 'cable-handle') {
+      const handle = cable.controlPoints[drag.handleIndex];
+      if (!handle) return;
+      handle.x = snapped.x;
+      handle.y = snapped.y;
+      render();
+    } else if (drag.kind === 'cable-bend') {
+      if (!Array.isArray(cable.bendPoints)) return;
+      const bend = cable.bendPoints[drag.bendIndex];
+      if (!bend) return;
+      bend.x = snapped.x;
+      bend.y = snapped.y;
+      render();
+    }
+  });
+})();
+
 initializeSurvey();
   </script>
 </body>

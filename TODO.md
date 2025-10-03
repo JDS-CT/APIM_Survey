@@ -6,7 +6,12 @@ TEST -- using AGENTS.md file
 ✅ [p1] Draft two prototype approaches for connecting items with curved joints, including how to register connection points on bounding boxes.
 Prototypes should target draggable Bézier splines and, if feasible, a physics-based cable simulation. Cables must connect by clicking endpoints and allow realistic movement with a max length limit (e.g., 10 ft / 3 m). Physics-based routing may bias cables to avoid objects, but manual bend points remain acceptable. Some machines can hold cables in service loops, so only max length is enforced.
 ✅ [p1] Identify required metadata schema updates so cables can snap to defined connection sockets on each asset. No rotation/orientation data is required. Metadata should only define which cable types are valid for which machine types. The goal is simple layout validation, not CAD-level detail.
-🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
+✅ [p1] Stand up a shared cable catalog describing cable types, asset socket anchors, and default max lengths so both survey and FPV modes can reference identical metadata.
+✅ [p1] Extend the layout store, persistence helpers, and normalization logic to include a cables array with endpoints, control points, and cached length/status data.
+✅ [p1] Implement 2D survey affordances for sockets (hover highlights) and Bézier cable drawing/editing, including snapping control handles and persistence of bend points.
+✅ [p1] Render cable paths in the FPV demo via Three.js lines/tubes, reusing layout cables and mirroring color coding for cable types.
+✅ [p1] Add focused regression coverage asserting cable metadata availability and layout serialization fields so future refactors keep the feature intact.
+ 🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
 🔲 [p2] Add an automated check that first-person mode stops moving when no input is pressed.
 🔲 [p2] Backfill regression coverage for the new FPS module loader path or document why automated coverage is deferred.
 🔲 [p2] Adjust the wall-door overlap so the door remains visible when placed (either by carving a doorway gap or thickening the door asset). If possible, implement dynamic wall subtraction that updates when the door is moved. Otherwise, fallback to thickened door assets.

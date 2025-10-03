@@ -1,5 +1,12 @@
 # Changelog
 
+## 2025-10-03T00:25Z
+- feat: complete step [p1] Create regression coverage for layout store resolution, environment overrides, and shutdown handling in tests/test_server.py.
+- fix: complete step [p1] Normalize dev/server.py store path resolution with env/CLI overrides and eagerly prepare the persistence directory.
+- fix: complete step [p1] Ensure CTRL+C shutdown invokes ThreadingTCPServer shutdown and runs on daemon worker threads for quick exit.
+- feat: complete step [p2] Emit structured logging for layout reads/saves and server lifecycle events via the apim_survey.server logger.
+- docs: complete step [p2] Document the APIM_SURVEY_LAYOUT_STORE override and logging behavior in dev/server.py.
+
 ## 2025-10-03T00:15Z
 - fix: ✅ [p1] Capture a reference 2D export and harden the orbit viewer importer by stripping BOM/null characters and logging nested parse errors.
 - fix: ✅ [p1] Wire the orbit viewer status banner to surface success/failure details when reloading the scene after imports.

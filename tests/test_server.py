@@ -12,7 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from dev.server import LayoutHTTPServer, LayoutRequestHandler, LayoutStore  # noqa: E402
+from dev.server import (  # noqa: E402
+    LayoutHTTPServer,
+    LayoutRequestHandler,
+    LayoutStore,
+    resolve_store_path,
+)
 
 
 @pytest.fixture
@@ -20,11 +25,45 @@ def layout_store(tmp_path: Path) -> LayoutStore:
     return LayoutStore(tmp_path / "layout.json")
 
 
+def test_layout_store_initializes_directory(tmp_path: Path) -> None:
+    target = tmp_path / "nested" / "path" / "layout.json"
+    assert not target.parent.exists()
+
+    store = LayoutStore(target)
+
+    assert store.path == target
+    assert target.parent.exists()
+
+
 def test_store_round_trip(layout_store: LayoutStore) -> None:
     assert layout_store.read() is None
     payload = {"room": {"W": 7200, "L": 5400}, "floor_items": []}
     layout_store.write(payload)
     assert layout_store.read() == payload
+
+
+def test_resolve_store_path_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    env_path = Path("custom") / "store.json"
+    monkeypatch.setenv("APIM_SURVEY_LAYOUT_STORE", str(env_path))
+
+    resolved = resolve_store_path()
+
+    expected = (tmp_path / env_path).resolve()
+    assert resolved == expected
+
+
+def test_resolve_store_path_cli_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("APIM_SURVEY_LAYOUT_STORE", "ignored.json")
+    cli_path = tmp_path / "from_cli.json"
+
+    resolved = resolve_store_path(cli_path)
+
+    assert resolved == cli_path.resolve()
 
 
 @pytest.fixture
@@ -45,6 +84,10 @@ def running_server(
     finally:
         server.shutdown()
         thread.join(timeout=1)
+
+
+def test_server_uses_daemon_threads() -> None:
+    assert LayoutHTTPServer.daemon_threads is True
 
 
 def test_http_api_round_trip(running_server) -> None:

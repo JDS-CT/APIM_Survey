@@ -1,5 +1,9 @@
 # Changelog
 
+## 2025-10-03T18:57:17Z
+- docs: complete step [p1] Document curved cable connection prototypes covering Bézier and physics-driven approaches with bounding-box socket registration.
+- docs: complete step [p1] Outline cable metadata schema updates so sockets declare allowed cable types for validation across survey and FPV views.
+
 ## 2025-10-03T16:31:24Z
 - chore: complete step [p1] Remove the obsolete MWE viewer, its archived assets, and navigation hooks so the prototype only links to supported flows.
 - chore: complete step [p1] Excise orbit viewer references from the landing page, docs, and persistence keys to align messaging with the FPV workflow.

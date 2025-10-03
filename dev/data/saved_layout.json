@@ -1,0 +1,122 @@
+{
+  "units": "mm",
+  "room": {
+    "W": 6000,
+    "L": 8000
+  },
+  "snap_mm": 100,
+  "imperial_display": false,
+  "mode": "basic",
+  "floor_items": [
+    {
+      "id": "floor_1",
+      "type": "microscope",
+      "x": 1700,
+      "y": 6100,
+      "w": 2200,
+      "l": 1800,
+      "rotation": 0
+    },
+    {
+      "id": "floor_2",
+      "type": "table",
+      "x": 6000,
+      "y": 5900,
+      "w": 1800,
+      "l": 900,
+      "rotation": 0
+    },
+    {
+      "id": "floor_3",
+      "type": "pump",
+      "x": 4200,
+      "y": 3400,
+      "w": 1200,
+      "l": 600,
+      "rotation": 0
+    },
+    {
+      "id": "floor_4",
+      "type": "floorBox",
+      "x": 3000,
+      "y": 3600,
+      "w": 600,
+      "l": 600,
+      "rotation": 0
+    },
+    {
+      "id": "floor_7",
+      "type": "microscope",
+      "x": 1600,
+      "y": 2600,
+      "w": 2200,
+      "l": 1800,
+      "rotation": 0
+    },
+    {
+      "id": "floor_8",
+      "type": "microscope",
+      "x": 4600,
+      "y": 5800,
+      "w": 2200,
+      "l": 1800,
+      "rotation": 0
+    }
+  ],
+  "wall_items": [
+    {
+      "id": "socket_5",
+      "type": "socket",
+      "wall": "base:1",
+      "s": 1500,
+      "h": 300
+    },
+    {
+      "id": "socket_6",
+      "type": "socket",
+      "wall": "base:3",
+      "s": 4500,
+      "h": 300
+    }
+  ],
+  "custom_walls": [
+    {
+      "id": "wall_9",
+      "name": "Custom Wall 1",
+      "x1": 400,
+      "y1": 6600,
+      "x2": 4200,
+      "y2": 1600,
+      "thickness": 200
+    },
+    {
+      "id": "wall_10",
+      "name": "Custom Wall 2",
+      "x1": 5100,
+      "y1": 1700,
+      "x2": 1900,
+      "y2": 1000,
+      "thickness": 200
+    }
+  ],
+  "doors": [
+    {
+      "id": "door_11",
+      "wall": "custom:wall_10",
+      "offset": 2250,
+      "width": 900,
+      "thickness": 80
+    },
+    {
+      "id": "door_12",
+      "wall": "custom:wall_10",
+      "offset": 1200,
+      "width": 900,
+      "thickness": 80
+    }
+  ],
+  "selected_surface": {
+    "type": "floorItem",
+    "id": "floor_8"
+  }
+}

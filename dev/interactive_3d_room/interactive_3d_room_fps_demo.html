@@ -357,10 +357,14 @@
     const focusAssetBtn = document.getElementById('focusAsset');
     const roomInfo = document.getElementById('roomInfo');
     const walkStatus = document.getElementById('walkStatus');
+    const viewportSection = document.querySelector('.viewport');
+    const NAVIGATION_KEYS = new Set(['Space', 'ShiftLeft', 'ShiftRight']);
+    const INTERACTIVE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
 
     let handMode = false;
     document.body.dataset.handMode = 'off';
     let walkOverlayHideTimer = null;
+    let viewportInteracting = false;
 
     const supportsPointerLock = typeof document !== 'undefined' && 'pointerLockElement' in document;
     const POINTER_LOCK_UNSUPPORTED_MESSAGE = 'Pointer lock is unavailable in this browser. Try a desktop Chromium or Firefox build.';
@@ -472,6 +476,38 @@
       }, WALK_OVERLAY_AUTO_HIDE_MS);
     }
 
+    function isEditableTarget(target) {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      if (INTERACTIVE_TAGS.has(target.tagName)) return true;
+      return Boolean(
+        target.closest('input, textarea, select, [contenteditable="true"]')
+      );
+    }
+
+    function isViewportNode(node) {
+      return viewportSection instanceof HTMLElement && node instanceof Node
+        ? viewportSection.contains(node)
+        : false;
+    }
+
+    function shouldTrapNavigationKey(event) {
+      if (pointerControls.isLocked || handMode) return true;
+      if (!viewportInteracting) return false;
+      const target = event.target;
+      if (isViewportNode(target)) return true;
+      return target === document.body || target === document.documentElement;
+    }
+
+    function maybePreventNavigationKey(event) {
+      if (!NAVIGATION_KEYS.has(event.code)) return false;
+      if (event.defaultPrevented) return false;
+      if (isEditableTarget(event.target)) return false;
+      if (!shouldTrapNavigationKey(event)) return false;
+      event.preventDefault();
+      return true;
+    }
+
     function updateWalkUi() {
       const locked = pointerControls.isLocked;
       if (enterWalkBtn) enterWalkBtn.disabled = locked || !supportsPointerLock || handMode;
@@ -491,6 +527,7 @@
         return;
       }
       handMode = active;
+      viewportInteracting = handMode;
       document.body.dataset.handMode = handMode ? 'on' : 'off';
       if (handMode) {
         if (pointerControls.isLocked) {
@@ -1108,6 +1145,8 @@
         return;
       }
 
+      maybePreventNavigationKey(event);
+
       if (handMode) {
         if (adjustSelectedObjectFromHandMode(event)) {
           event.preventDefault();
@@ -1142,6 +1181,7 @@
       }
     }
     function onKeyUp(event) {
+      maybePreventNavigationKey(event);
       if (handMode) {
         if (event.code === 'Space' || event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
           event.preventDefault();
@@ -1180,6 +1220,7 @@
     document.addEventListener('keyup', onKeyUp);
 
     pointerControls.addEventListener('lock', () => {
+      viewportInteracting = true;
       hideWalkOverlay();
       if (handMode) {
         setHandMode(false, { silent: true });
@@ -1193,6 +1234,7 @@
       setWalkStatus('Walk mode active — use WASD and your mouse to move. Press Esc to exit.', 'success');
     });
     pointerControls.addEventListener('unlock', () => {
+      viewportInteracting = handMode;
       resetMovementState();
       updateWalkUi();
       if (handMode) {
@@ -1207,6 +1249,7 @@
 
     document.addEventListener('pointerlockerror', event => {
       console.warn('Pointer lock request failed', event);
+      viewportInteracting = true;
       showWalkOverlay();
       scheduleWalkOverlayAutoHide();
       resetMovementState();
@@ -1339,6 +1382,7 @@
     }
 
     function onViewportPointerDown(event) {
+      viewportInteracting = true;
       if (pointerControls.isLocked) return;
       if (event.altKey) {
         beginOrbit(event);
@@ -1356,6 +1400,10 @@
     });
     renderer.domElement.addEventListener('pointerup', endOrbit);
     renderer.domElement.addEventListener('pointercancel', endOrbit);
+
+    document.addEventListener('pointerdown', event => {
+      viewportInteracting = isViewportNode(event.target);
+    }, true);
 
     function resetLayout(persistOptions = {}) {
       pointerControls.unlock();
@@ -1394,6 +1442,7 @@
         setWalkStatus(POINTER_LOCK_UNSUPPORTED_MESSAGE, 'warn');
         return;
       }
+      viewportInteracting = true;
       if (renderer.domElement && typeof renderer.domElement.focus === 'function') {
         try {
           renderer.domElement.focus();

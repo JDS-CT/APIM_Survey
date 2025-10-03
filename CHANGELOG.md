@@ -1,5 +1,13 @@
 # Changelog
 
+## 2025-10-03T10:51:44Z
+- fix: complete step [p1] Stabilize the orbit and MWE viewers by disabling X3D examine inertia drift via explicit NavigationInfo typeParams.
+- fix: complete step [p1] Remap the FPS controller so Space lifts and Shift descends while damping vertical velocity correctly.
+- test: complete step [p1] Extend the frontend markup assertions to cover the updated vertical thrust math and hand mode scaffolding.
+- feat: complete step [p1] Allow GLTF assets to translate on the Y axis while clamping within walkable bounds so they no longer sink through the floor.
+- fix: complete step [p1] Auto-hide the walk overlay whenever walk mode is inactive so editing gizmos stay visible after unlocking pointer lock.
+- feat: complete step [p1] Add a Ctrl-toggle Hand Mode that pauses movement and enables mouse/WASDQE adjustments for precise object manipulation.
+
 ## 2025-10-03T04:30:00Z
 - chore: complete step [p1] Relocate the Three.js modules under dev/shared/vendor/three so the FPS demo can import them locally.
 - chore: complete step [p1] Stage the dozenSidedStack GLTF bundle beside the FPS prototype for relative loading.

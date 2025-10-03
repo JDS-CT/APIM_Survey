@@ -1,5 +1,11 @@
 # Changelog
 
+## 2025-10-03T16:31:24Z
+- chore: complete step [p1] Remove the obsolete MWE viewer, its archived assets, and navigation hooks so the prototype only links to supported flows.
+- chore: complete step [p1] Excise orbit viewer references from the landing page, docs, and persistence keys to align messaging with the FPV workflow.
+- feat: complete step [p1] Sync GLTF asset placement across the 2D survey and FPV by sharing a layout storage key and serializing asset transforms.
+- test: extend frontend markup checks to cover the shared layout key, GLTF asset persistence helpers, and absence of the legacy tabs.
+
 ## 2025-10-03T13:58:00Z
 - fix: complete step [p1] Harden the FPS GLTF loader with bounding-box diagnostics, scale heuristics, and UI status updates so invisible imports surface actionable feedback.
 - feat: complete step [p1] Auto-scale and frame loaded GLTF assets while adding a reset control that recenters the camera on demand for recovery.

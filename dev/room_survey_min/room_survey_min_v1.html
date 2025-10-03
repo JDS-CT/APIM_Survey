@@ -213,9 +213,7 @@
     <nav>
       <a class="nav-link" href="../index.html">Home</a>
       <a class="nav-link active" href="room_survey_min_v1.html">2D Survey</a>
-      <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_v1.html">Orbit Viewer</a>
       <a class="nav-link" href="../interactive_3d_room/interactive_3d_room_fps_demo.html">First-Person Demo</a>
-      <a class="nav-link" href="../test_objects/mwe_viewer.html">MWE Viewer</a>
     </nav>
   </header>
   <main>
@@ -340,14 +338,15 @@ const doorsG = document.getElementById('doorsLayer');
 const floorItemsG = document.getElementById('floorItems');
 const wallItemsG = document.getElementById('wallItems');
 
-const LAYOUT_STORAGE_KEY = 'room-orbit-viewer.latest-layout';
+const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';
 const LAYOUT_PERSIST_DELAY_MS = 240;
 
 const FLOOR_ITEM_DEFS = {
   floorBox: { label: 'Floor Box', w: 600, l: 600, fill: '#1e88e5', stroke: '#1e88e5' },
   microscope: { label: 'Microscope', w: 2200, l: 1800, fill: '#8e24aa', stroke: '#5e35b1' },
   table: { label: 'Table', w: 1800, l: 900, fill: '#3949ab', stroke: '#1a237e' },
-  pump: { label: 'Vacuum Pump', w: 1200, l: 600, fill: '#ef6c00', stroke: '#e65100' }
+  pump: { label: 'Vacuum Pump', w: 1200, l: 600, fill: '#ef6c00', stroke: '#e65100' },
+  gltfAsset: { label: 'GLTF Asset', w: 2000, l: 2000, fill: '#8b5cf6', stroke: '#6d28d9' }
 };
 
 const DEFAULT_ROOM_PRESET = () => ({
@@ -449,7 +448,9 @@ function normalizeFloorItemFromLayout(item) {
     y: toNumber(item.y, 0),
     w: toNumber(item.w ?? item.size ?? def.w, def.w),
     l: toNumber(item.l ?? item.size ?? def.l, def.l),
-    rotation: toNumber(item.rotation, 0)
+    rotation: toNumber(item.rotation, 0),
+    assetRef: typeof item.assetRef === 'string' ? item.assetRef : undefined,
+    elevation_mm: item.elevation_mm !== undefined ? toNumber(item.elevation_mm, 0) : undefined
   };
 }
 
@@ -524,15 +525,22 @@ function snapshotLayout() {
     snap_mm: Math.round(state.snap),
     imperial_display: !!state.imperial,
     mode: state.mode,
-    floor_items: state.floorItems.map(item => ({
-      id: item.id,
-      type: item.type,
-      x: Math.round(item.x),
-      y: Math.round(item.y),
-      w: Math.round(item.w),
-      l: Math.round(item.l),
-      rotation: Math.round(item.rotation || 0)
-    })),
+    floor_items: state.floorItems.map(item => {
+      const snapshot = {
+        id: item.id,
+        type: item.type,
+        x: Math.round(item.x),
+        y: Math.round(item.y),
+        w: Math.round(item.w),
+        l: Math.round(item.l),
+        rotation: Math.round(item.rotation || 0)
+      };
+      if (item.assetRef) snapshot.assetRef = item.assetRef;
+      if (item.elevation_mm !== undefined) {
+        snapshot.elevation_mm = Math.round(item.elevation_mm);
+      }
+      return snapshot;
+    }),
     wall_items: state.wallItems.map(item => ({
       id: item.id,
       type: item.type,

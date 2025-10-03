@@ -1,40 +1,34 @@
 from pathlib import Path
 
 
-def test_orbit_viewer_uses_x3d_namespace() -> None:
-    html_path = Path("dev/interactive_3d_room/interactive_3d_room_v1.html")
-    html = html_path.read_text(encoding="utf-8")
-
-    assert "createElementNS" in html
-
-    for tag in ["Coordinate", "Shape", "Appearance", "Material", "Box", "Transform"]:
-        assert f"createX3DElement('{tag}')" in html
-
-
-def test_orbit_and_mwe_viewers_disable_examine_drift() -> None:
-    orbit_html = Path("dev/interactive_3d_room/interactive_3d_room_v1.html").read_text(
-        encoding="utf-8"
-    )
-    mwe_html = Path("dev/test_objects/mwe_viewer.html").read_text(encoding="utf-8")
-
-    expected = 'typeParams="1 0 0 0 0 0"'
-
-    assert expected in orbit_html
-    assert expected in mwe_html
-
-
-def test_home_nav_includes_mwe_tab() -> None:
+def test_home_nav_lists_active_demos() -> None:
     html = Path("dev/index.html").read_text(encoding="utf-8")
-    assert 'href="test_objects/mwe_viewer.html"' in html
-    assert ">MWE Viewer<" in html
+    assert 'href="room_survey_min/room_survey_min_v1.html"' in html
+    assert 'href="interactive_3d_room/interactive_3d_room_fps_demo.html"' in html
+    assert "MWE Viewer" not in html
+    assert "Orbit Viewer" not in html
 
 
-def test_room_survey_references_layout_persistence() -> None:
+def test_room_survey_handles_gltf_asset_floor_item() -> None:
     html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
         encoding="utf-8"
     )
-    assert "LAYOUT_STORAGE_KEY" in html
-    assert "/api/layout" in html
+    assert "const FLOOR_ITEM_DEFS" in html
+    assert "gltfAsset" in html
+    assert "assetRef" in html
+    assert "elevation_mm" in html
+
+
+def test_layout_storage_key_shared_between_views() -> None:
+    survey_html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+    fps_html = Path(
+        "dev/interactive_3d_room/interactive_3d_room_fps_demo.html"
+    ).read_text(encoding="utf-8")
+    expected = "const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';"
+    assert expected in survey_html
+    assert expected in fps_html
 
 
 def test_fps_viewer_handles_pointer_lock_state() -> None:
@@ -86,6 +80,17 @@ def test_fps_viewer_exposes_translation_snap_controls() -> None:
     assert "function applyTranslationSnap" in html
     assert "transformControls.setTranslationSnap(translationSnap);" in html
     assert "function hasActiveMovement()" in html
+
+
+def test_fps_viewer_persists_gltf_asset_state() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const ASSET_FLOOR_ITEM_TYPE = 'gltfAsset';" in html
+    assert "function worldToLayoutFloor" in html
+    assert "function syncAssetLayoutFromAnchor" in html
+    assert "assetRef" in html
 
 
 def test_fps_viewer_reports_asset_scale_and_recenter_controls() -> None:

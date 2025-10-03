@@ -265,9 +265,10 @@
       <div class="info-box">
         <strong>Controls</strong>
         <ul>
-          <li>Click <strong>Enter Walk Mode</strong> to lock the pointer, then use <strong>WASD</strong>, the mouse, and <strong>Space</strong>/<strong>Shift</strong>.</li>
-          <li>Hold <strong>Ctrl</strong> and drag in the viewport (while not walking) to orbit the camera and frame the room before entering.</li>
-          <li>Select the sample asset to reveal the move gizmo, then drag the arrows to reposition it on the floor.</li>
+          <li>Click <strong>Enter Walk Mode</strong> to lock the pointer, then use <strong>WASD</strong>, the mouse, <strong>Space</strong> to fly up, and <strong>Shift</strong> to fly down.</li>
+          <li>Press <strong>Ctrl</strong> to toggle <strong>Hand Mode</strong>: movement pauses so you can drag gizmos or tap <strong>WASD</strong>/<strong>Space</strong>/<strong>Shift</strong>/<strong>Q</strong>/<strong>E</strong> to nudge or rotate the selected object.</li>
+          <li>Hold <strong>Alt</strong> and drag in the viewport (while not walking) to orbit the camera and frame the room before entering.</li>
+          <li>Select the sample asset to reveal the move gizmo, then drag the arrows to reposition it anywhere in the room.</li>
         </ul>
       </div>
       <div class="legend">
@@ -283,7 +284,7 @@
       <div class="overlay" id="walkOverlay">
         <div class="card">
           <h3>Click “Enter Walk Mode”</h3>
-          <p>Use <strong>WASD</strong> to move, <strong>mouse</strong> to look, and <strong>Space</strong>/<strong>Shift</strong> to move vertically. Press <strong>Esc</strong> to exit walk mode. Click the asset (when not walking) to drag it on the floor.</p>
+          <p>Use <strong>WASD</strong> to move, <strong>mouse</strong> to look, <strong>Space</strong> to rise, and <strong>Shift</strong> to descend. Press <strong>Ctrl</strong> for Hand Mode when you want to adjust objects, and <strong>Alt</strong>+drag (while idle) to orbit.</p>
         </div>
       </div>
     </section>
@@ -313,6 +314,12 @@
       table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
       pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 }
     };
+
+    const HAND_MODE_TOGGLE_KEY = 'Control';
+    const HAND_MODE_TRANSLATE_STEP = 0.1;
+    const HAND_MODE_VERTICAL_STEP = 0.05;
+    const HAND_MODE_ROTATE_STEP = THREE.MathUtils.degToRad(5);
+    const WALK_OVERLAY_AUTO_HIDE_MS = 1800;
 
     const DEFAULT_ROOM_PRESET = () => ({
       room: { W: 6000, L: 8000 },
@@ -351,6 +358,10 @@
     const roomInfo = document.getElementById('roomInfo');
     const walkStatus = document.getElementById('walkStatus');
 
+    let handMode = false;
+    document.body.dataset.handMode = 'off';
+    let walkOverlayHideTimer = null;
+
     const supportsPointerLock = typeof document !== 'undefined' && 'pointerLockElement' in document;
     const POINTER_LOCK_UNSUPPORTED_MESSAGE = 'Pointer lock is unavailable in this browser. Try a desktop Chromium or Firefox build.';
 
@@ -383,7 +394,7 @@
     const pointerControls = new PointerLockControls(camera, renderer.domElement);
     const transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.setMode('translate');
-    transformControls.showY = false;
+    transformControls.showY = true;
     transformControls.setTranslationSnap(0.05);
     scene.add(transformControls);
     scene.add(pointerControls.getObject());
@@ -437,10 +448,125 @@
       walkStatus.dataset.tone = tone;
     }
 
+    function showWalkOverlay() {
+      if (!walkOverlay) return;
+      walkOverlay.classList.remove('hidden');
+    }
+
+    function hideWalkOverlay() {
+      if (!walkOverlay) return;
+      walkOverlay.classList.add('hidden');
+      if (walkOverlayHideTimer) {
+        clearTimeout(walkOverlayHideTimer);
+        walkOverlayHideTimer = null;
+      }
+    }
+
+    function scheduleWalkOverlayAutoHide() {
+      if (!walkOverlay) return;
+      if (walkOverlayHideTimer) {
+        clearTimeout(walkOverlayHideTimer);
+      }
+      walkOverlayHideTimer = window.setTimeout(() => {
+        hideWalkOverlay();
+      }, WALK_OVERLAY_AUTO_HIDE_MS);
+    }
+
     function updateWalkUi() {
       const locked = pointerControls.isLocked;
-      if (enterWalkBtn) enterWalkBtn.disabled = locked || !supportsPointerLock;
+      if (enterWalkBtn) enterWalkBtn.disabled = locked || !supportsPointerLock || handMode;
       if (resetWalkBtn) resetWalkBtn.disabled = false;
+    }
+
+    function setHandMode(active, options = {}) {
+      const { silent = false, showOverlay = false } = options;
+      if (handMode === active) {
+        if (!handMode) {
+          if (showOverlay) {
+            scheduleWalkOverlayAutoHide();
+          } else {
+            hideWalkOverlay();
+          }
+        }
+        return;
+      }
+      handMode = active;
+      document.body.dataset.handMode = handMode ? 'on' : 'off';
+      if (handMode) {
+        if (pointerControls.isLocked) {
+          pointerControls.unlock();
+        }
+        resetMovementState();
+        if (showOverlay) {
+          showWalkOverlay();
+          scheduleWalkOverlayAutoHide();
+        } else {
+          hideWalkOverlay();
+        }
+        if (!silent) {
+          setWalkStatus('Hand Mode active — drag gizmos or tap WASDQE/Space/Shift to adjust the selected object.', 'info');
+        }
+      } else {
+        if (!silent) {
+          setWalkStatus('Hand Mode off. Click “Enter Walk Mode” to explore.', 'neutral');
+        }
+        if (showOverlay) {
+          scheduleWalkOverlayAutoHide();
+        } else {
+          hideWalkOverlay();
+        }
+      }
+      updateWalkUi();
+    }
+
+    function adjustSelectedObjectFromHandMode(event) {
+      if (!handMode || !selectedObject) return false;
+      const fastMultiplier = event.altKey ? 5 : 1;
+      const step = HAND_MODE_TRANSLATE_STEP * fastMultiplier;
+      const verticalStep = HAND_MODE_VERTICAL_STEP * fastMultiplier;
+      const rotateStep = HAND_MODE_ROTATE_STEP * fastMultiplier;
+      let handled = false;
+      switch (event.code) {
+        case 'KeyW':
+          selectedObject.position.z -= step;
+          handled = true;
+          break;
+        case 'KeyS':
+          selectedObject.position.z += step;
+          handled = true;
+          break;
+        case 'KeyA':
+          selectedObject.position.x -= step;
+          handled = true;
+          break;
+        case 'KeyD':
+          selectedObject.position.x += step;
+          handled = true;
+          break;
+        case 'Space':
+          selectedObject.position.y += verticalStep;
+          handled = true;
+          break;
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          selectedObject.position.y -= verticalStep;
+          handled = true;
+          break;
+        case 'KeyQ':
+          selectedObject.rotation.y += rotateStep;
+          handled = true;
+          break;
+        case 'KeyE':
+          selectedObject.rotation.y -= rotateStep;
+          handled = true;
+          break;
+      }
+      if (handled) {
+        clampAsset(selectedObject);
+        selectedObject.userData.baseY = selectedObject.position.y;
+        scheduleWalkOverlayAutoHide();
+      }
+      return handled;
     }
 
     function updateRendererSize() {
@@ -931,6 +1057,7 @@
 
     function resetWalkPosition() {
       const cameraHolder = pointerControls.getObject();
+      setHandMode(false, { silent: true });
       resetMovementState();
       cameraHolder.position.set(walkBounds.minX + 0.6, 1.6, walkBounds.minZ + 1.2);
       cameraHolder.rotation.set(0, 0, 0);
@@ -962,7 +1089,7 @@
 
         if (moveState.forward || moveState.back) velocity.z -= direction.z * speed * delta;
         if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
-        if (moveState.up || moveState.down) velocity.y -= direction.y * speed * delta;
+        if (moveState.up || moveState.down) velocity.y += direction.y * speed * delta;
 
         pointerControls.moveRight(-velocity.x * delta);
         pointerControls.moveForward(-velocity.z * delta);
@@ -973,27 +1100,79 @@
     }
 
     function onKeyDown(event) {
+      if (event.key === HAND_MODE_TOGGLE_KEY) {
+        if (!event.repeat) {
+          setHandMode(!handMode);
+        }
+        event.preventDefault();
+        return;
+      }
+
+      if (handMode) {
+        if (adjustSelectedObjectFromHandMode(event)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
       if (!pointerControls.isLocked) return;
+
       switch (event.code) {
-        case 'KeyW': moveState.forward = true; break;
-        case 'KeyS': moveState.back = true; break;
-        case 'KeyA': moveState.left = true; break;
-        case 'KeyD': moveState.right = true; break;
-        case 'Space': moveState.up = true; break;
+        case 'KeyW':
+          moveState.forward = true;
+          break;
+        case 'KeyS':
+          moveState.back = true;
+          break;
+        case 'KeyA':
+          moveState.left = true;
+          break;
+        case 'KeyD':
+          moveState.right = true;
+          break;
+        case 'Space':
+          moveState.up = true;
+          event.preventDefault();
+          break;
         case 'ShiftLeft':
-        case 'ShiftRight': moveState.down = true; break;
+        case 'ShiftRight':
+          moveState.down = true;
+          event.preventDefault();
+          break;
       }
     }
     function onKeyUp(event) {
+      if (handMode) {
+        if (event.code === 'Space' || event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
+          event.preventDefault();
+        }
+        return;
+      }
+
       if (!pointerControls.isLocked) return;
+
       switch (event.code) {
-        case 'KeyW': moveState.forward = false; break;
-        case 'KeyS': moveState.back = false; break;
-        case 'KeyA': moveState.left = false; break;
-        case 'KeyD': moveState.right = false; break;
-        case 'Space': moveState.up = false; break;
+        case 'KeyW':
+          moveState.forward = false;
+          break;
+        case 'KeyS':
+          moveState.back = false;
+          break;
+        case 'KeyA':
+          moveState.left = false;
+          break;
+        case 'KeyD':
+          moveState.right = false;
+          break;
+        case 'Space':
+          moveState.up = false;
+          event.preventDefault();
+          break;
         case 'ShiftLeft':
-        case 'ShiftRight': moveState.down = false; break;
+        case 'ShiftRight':
+          moveState.down = false;
+          event.preventDefault();
+          break;
       }
     }
 
@@ -1001,21 +1180,35 @@
     document.addEventListener('keyup', onKeyUp);
 
     pointerControls.addEventListener('lock', () => {
-      walkOverlay.classList.add('hidden');
+      hideWalkOverlay();
+      if (handMode) {
+        setHandMode(false, { silent: true });
+      }
+      if (walkOverlayHideTimer) {
+        clearTimeout(walkOverlayHideTimer);
+        walkOverlayHideTimer = null;
+      }
       resetMovementState();
       updateWalkUi();
       setWalkStatus('Walk mode active — use WASD and your mouse to move. Press Esc to exit.', 'success');
     });
     pointerControls.addEventListener('unlock', () => {
-      walkOverlay.classList.remove('hidden');
       resetMovementState();
       updateWalkUi();
-      setWalkStatus('Walk mode exited. Click “Enter Walk Mode” to continue exploring.', 'neutral');
+      if (handMode) {
+        hideWalkOverlay();
+        setWalkStatus('Hand Mode active — drag gizmos or tap WASDQE/Space/Shift to adjust the selected object.', 'info');
+      } else {
+        showWalkOverlay();
+        scheduleWalkOverlayAutoHide();
+        setWalkStatus('Walk mode exited. Click “Enter Walk Mode” to continue exploring.', 'neutral');
+      }
     });
 
     document.addEventListener('pointerlockerror', event => {
       console.warn('Pointer lock request failed', event);
-      walkOverlay.classList.remove('hidden');
+      showWalkOverlay();
+      scheduleWalkOverlayAutoHide();
       resetMovementState();
       updateWalkUi();
       setWalkStatus('Pointer lock was blocked. Click inside the viewport first or open this demo in a standalone tab.', 'warn');
@@ -1030,22 +1223,29 @@
     transformControls.addEventListener('dragging-changed', event => {
       if (event.value) {
         pointerControls.unlock();
+        setHandMode(true, { silent: true });
+      } else {
+        scheduleWalkOverlayAutoHide();
       }
     });
 
     transformControls.addEventListener('objectChange', () => {
       if (!selectedObject) return;
-      const baseY = selectedObject.userData && selectedObject.userData.baseY !== undefined
-        ? selectedObject.userData.baseY
-        : selectedObject.position.y;
-      selectedObject.position.y = baseY;
+      const minY = selectedObject.userData && selectedObject.userData.minY !== undefined
+        ? selectedObject.userData.minY
+        : 0;
+      selectedObject.position.y = Math.max(minY, selectedObject.position.y);
       clampAsset(selectedObject);
+      selectedObject.userData.baseY = selectedObject.position.y;
     });
 
     function clampAsset(object) {
       const radius = Math.max(assetSize.x, assetSize.z) / 2;
       object.position.x = clamp(object.position.x, walkBounds.minX + radius, walkBounds.maxX - radius);
       object.position.z = clamp(object.position.z, walkBounds.minZ + radius, walkBounds.maxZ - radius);
+      const minY = object.userData && object.userData.minY !== undefined ? object.userData.minY : 0;
+      const maxY = walkBounds.maxY - Math.max(0, assetSize.y / 2);
+      object.position.y = clamp(object.position.y, minY, maxY);
     }
 
     function repositionAssetIfNeeded() {
@@ -1078,7 +1278,7 @@
 
     function onPointerDown(event) {
       if (pointerControls.isLocked) return;
-      if (event.ctrlKey) return;
+      if (event.altKey) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1089,6 +1289,7 @@
       } else {
         selectObject(null);
       }
+      scheduleWalkOverlayAutoHide();
     }
 
     function beginOrbit(event) {
@@ -1139,7 +1340,7 @@
 
     function onViewportPointerDown(event) {
       if (pointerControls.isLocked) return;
-      if (event.ctrlKey) {
+      if (event.altKey) {
         beginOrbit(event);
         event.preventDefault();
         return;
@@ -1286,6 +1487,7 @@
           const baseY = assetSize.y / 2;
           assetAnchor.position.set(0, baseY, 0);
           assetAnchor.userData.baseY = baseY;
+          assetAnchor.userData.minY = baseY;
           selectable.splice(0, selectable.length, assetAnchor);
           assetLoaded = true;
           selectObject(assetAnchor);
@@ -1310,6 +1512,7 @@
 
     resetLayout({ local: false, remote: false });
     updateRendererSize();
+    scheduleWalkOverlayAutoHide();
     animate();
 
     (async () => {

@@ -214,6 +214,7 @@
       <a class="nav-link" href="../room_survey_min/room_survey_min_v1.html">2D Survey</a>
       <a class="nav-link active" href="interactive_3d_room_v1.html">Orbit Viewer</a>
       <a class="nav-link" href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
+      <a class="nav-link" href="../test_objects/mwe_viewer.html">MWE Viewer</a>
     </nav>
   </header>
   <main>
@@ -474,8 +475,19 @@ function parseLayoutText(rawText) {
   try {
     return coerceLayoutPayload(JSON.parse(sanitized));
   } catch (err) {
+    let parseError = err;
+    const firstBrace = sanitized.indexOf('{');
+    const lastBrace = sanitized.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const probableJson = sanitized.slice(firstBrace, lastBrace + 1);
+      try {
+        return coerceLayoutPayload(JSON.parse(probableJson));
+      } catch (fallbackErr) {
+        parseError = fallbackErr;
+      }
+    }
     const error = new Error('layout-file-invalid');
-    error.cause = err;
+    error.cause = parseError;
     error.raw = sanitized.slice(0, 1200);
     throw error;
   }

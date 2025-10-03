@@ -1,5 +1,11 @@
 # Changelog
 
+## 2025-10-03T04:30:00Z
+- chore: complete step [p1] Relocate the Three.js modules under dev/shared/vendor/three so the FPS demo can import them locally.
+- chore: complete step [p1] Stage the dozenSidedStack GLTF bundle beside the FPS prototype for relative loading.
+- fix: complete step [p1] Rework interactive_3d_room_fps_demo.html to load the GLTF sample with local modules and refreshed walk/load controls.
+- test: complete step [p1] Extend the FPS frontend markup assertions to cover the GLTF loader wiring and new button identifiers.
+
 ## 2025-10-03T03:45:00Z
 - fix: complete step [p1] Replace the FPS importmap with explicit Three.js module URLs so blocked importmaps no longer break the controls panel.
 - fix: complete step [p1] Point the FPS sample asset loader at `./dozenSidedStack-Body.x3d` so the sample import succeeds on hosted builds.

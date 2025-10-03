@@ -108,6 +108,18 @@
       display: grid;
       gap: 8px;
     }
+    .controls .control-status {
+      font-size: 13px;
+      color: var(--room-ui-muted);
+      margin: 4px 0 0;
+      min-height: 1.2em;
+    }
+    .controls .control-status[data-tone="warn"] {
+      color: #facc15;
+    }
+    .controls .control-status[data-tone="success"] {
+      color: #34d399;
+    }
     label {
       display: grid;
       gap: 6px;
@@ -255,6 +267,7 @@
       <div class="controls">
         <button id="enterWalk">Enter Walk Mode</button>
         <button id="resetWalk">Reset Walk Position</button>
+        <p class="control-status" id="walkStatus" aria-live="polite"></p>
       </div>
       <div class="info-box" id="roomInfo"></div>
       <div class="info-box">
@@ -344,6 +357,10 @@
     const loadAssetBtn = document.getElementById('loadAsset');
     const focusAssetBtn = document.getElementById('focusAsset');
     const roomInfo = document.getElementById('roomInfo');
+    const walkStatus = document.getElementById('walkStatus');
+
+    const supportsPointerLock = typeof document !== 'undefined' && 'pointerLockElement' in document;
+    const POINTER_LOCK_UNSUPPORTED_MESSAGE = 'Pointer lock is unavailable in this browser. Try a desktop Chromium or Firefox build.';
 
     function resolveThemeColor(variable, fallback) {
       const styles = getComputedStyle(document.body);
@@ -410,6 +427,29 @@
     let assetLoaded = false;
     let assetSize = new THREE.Vector3(1, 1, 1);
     let selectedObject = null;
+
+    function resetMovementState() {
+      moveState.forward = false;
+      moveState.back = false;
+      moveState.left = false;
+      moveState.right = false;
+      moveState.up = false;
+      moveState.down = false;
+      velocity.set(0, 0, 0);
+      direction.set(0, 0, 0);
+    }
+
+    function setWalkStatus(message, tone = 'neutral') {
+      if (!walkStatus) return;
+      walkStatus.textContent = message;
+      walkStatus.dataset.tone = tone;
+    }
+
+    function updateWalkUi() {
+      const locked = pointerControls.isLocked;
+      if (enterWalkBtn) enterWalkBtn.disabled = locked || !supportsPointerLock;
+      if (resetWalkBtn) resetWalkBtn.disabled = false;
+    }
 
     function updateRendererSize() {
       const { clientWidth, clientHeight } = rendererHost;
@@ -724,6 +764,11 @@
       applyLayout();
       selectObject(null);
       persistLatest(persistOptions);
+      if (supportsPointerLock) {
+        setWalkStatus('Layout imported. Click “Enter Walk Mode” to explore.', 'neutral');
+      } else {
+        setWalkStatus(POINTER_LOCK_UNSUPPORTED_MESSAGE, 'warn');
+      }
     }
 
     function mmPointToWorld(xMm, yMm) {
@@ -887,14 +932,19 @@
       repositionAssetIfNeeded();
       updateRoomInfo();
       resetWalkPosition();
+      pointerControls.unlock();
+      resetMovementState();
+      updateWalkUi();
     }
 
     function resetWalkPosition() {
       const cameraHolder = pointerControls.getObject();
+      resetMovementState();
       cameraHolder.position.set(walkBounds.minX + 0.6, 1.6, walkBounds.minZ + 1.2);
       cameraHolder.rotation.set(0, 0, 0);
       camera.position.set(0, 0, 0);
       camera.rotation.set(0, 0, 0);
+      updateWalkUi();
     }
 
     function clampCamera() {
@@ -931,6 +981,7 @@
     }
 
     function onKeyDown(event) {
+      if (!pointerControls.isLocked) return;
       switch (event.code) {
         case 'KeyW': moveState.forward = true; break;
         case 'KeyS': moveState.back = true; break;
@@ -942,6 +993,7 @@
       }
     }
     function onKeyUp(event) {
+      if (!pointerControls.isLocked) return;
       switch (event.code) {
         case 'KeyW': moveState.forward = false; break;
         case 'KeyS': moveState.back = false; break;
@@ -958,9 +1010,29 @@
 
     pointerControls.addEventListener('lock', () => {
       walkOverlay.classList.add('hidden');
+      resetMovementState();
+      updateWalkUi();
+      setWalkStatus('Walk mode active — use WASD and your mouse to move. Press Esc to exit.', 'success');
     });
     pointerControls.addEventListener('unlock', () => {
       walkOverlay.classList.remove('hidden');
+      resetMovementState();
+      updateWalkUi();
+      setWalkStatus('Walk mode exited. Click “Enter Walk Mode” to continue exploring.', 'neutral');
+    });
+
+    document.addEventListener('pointerlockerror', event => {
+      console.warn('Pointer lock request failed', event);
+      walkOverlay.classList.remove('hidden');
+      resetMovementState();
+      updateWalkUi();
+      setWalkStatus('Pointer lock was blocked. Click inside the viewport first or open this demo in a standalone tab.', 'warn');
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        resetMovementState();
+      }
     });
 
     transformControls.addEventListener('dragging-changed', event => {
@@ -1093,6 +1165,7 @@
     renderer.domElement.addEventListener('pointercancel', endOrbit);
 
     function resetLayout(persistOptions = {}) {
+      pointerControls.unlock();
       const preset = DEFAULT_ROOM_PRESET();
       layout.room.Wmm = preset.room.W;
       layout.room.Lmm = preset.room.L;
@@ -1103,6 +1176,11 @@
       applyLayout();
       selectObject(null);
       persistLatest(persistOptions);
+      if (supportsPointerLock) {
+        setWalkStatus('Default layout loaded. Click “Enter Walk Mode” to explore.', 'neutral');
+      } else {
+        setWalkStatus(POINTER_LOCK_UNSUPPORTED_MESSAGE, 'warn');
+      }
     }
 
     function focusOnAsset() {
@@ -1119,6 +1197,10 @@
     }
 
     enterWalkBtn.addEventListener('click', () => {
+      if (!supportsPointerLock) {
+        setWalkStatus(POINTER_LOCK_UNSUPPORTED_MESSAGE, 'warn');
+        return;
+      }
       if (renderer.domElement && typeof renderer.domElement.focus === 'function') {
         try {
           renderer.domElement.focus();
@@ -1126,12 +1208,14 @@
           console.warn('Unable to focus renderer element before pointer lock', err);
         }
       }
+      setWalkStatus('Requesting pointer lock…');
       pointerControls.lock();
     });
 
     resetWalkBtn.addEventListener('click', () => {
       pointerControls.unlock();
       resetWalkPosition();
+      setWalkStatus('Walk position reset. Click “Enter Walk Mode” to re-enter.', 'neutral');
     });
 
     resetLayoutBtn.addEventListener('click', () => {

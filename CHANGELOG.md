@@ -1,5 +1,13 @@
 # Changelog
 
+## 2025-10-03T00:15Z
+- fix: ✅ [p1] Capture a reference 2D export and harden the orbit viewer importer by stripping BOM/null characters and logging nested parse errors.
+- fix: ✅ [p1] Wire the orbit viewer status banner to surface success/failure details when reloading the scene after imports.
+- fix: ✅ [p1] Sync the first-person demo ingest path with the updated parser so walk bounds and HUD refresh after importing layouts.
+- docs: ✅ [p2] Document the end-to-end workflow in README.md and point to the sample layout export.
+- chore: ✅ [p2] Archive legacy prototype HTML under dev/archive/ to keep only Home, 2D Survey, Orbit Viewer, and First-Person Demo in circulation.
+- docs: Added `resources/layout_samples/default_room.json` as a known-good export for testing the import pipeline.
+
 ## 2025-10-02T23-43Z
 - fix: hardened orbit viewer imports to strip BOMs, unwrap nested payloads, and surface friendly errors when 2D exports are empty or malformed.
 - fix: restored the first-person demo by introducing a CDN-backed Three.js import map, applying the shared glass-dark theme, and sanitizing imported layout text.

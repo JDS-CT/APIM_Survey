@@ -458,7 +458,10 @@ function parseLayoutText(rawText) {
   if (typeof rawText !== 'string') {
     throw new Error('layout-file-empty');
   }
-  const sanitized = rawText.replace(/^\uFEFF/, '').trim();
+  const sanitized = rawText
+    .replace(/^\uFEFF/, '')
+    .replace(/\u0000/g, '')
+    .trim();
   if (!sanitized) {
     throw new Error('layout-file-empty');
   }
@@ -467,6 +470,7 @@ function parseLayoutText(rawText) {
   } catch (err) {
     const error = new Error('layout-file-invalid');
     error.cause = err;
+    error.raw = sanitized.slice(0, 1200);
     throw error;
   }
 }
@@ -915,10 +919,16 @@ if (importInput) {
       showStatus('Layout imported from file.', 'success');
     } catch (err) {
       console.error('Failed to load layout', err);
+      if (err && err.cause) {
+        console.error('Inner error:', err.cause);
+      }
       const code = err && err.message;
-      const message = code === 'layout-file-empty'
-        ? 'The selected file was empty.'
-        : 'Unable to parse layout file. Please ensure it is a valid export from the 2D survey.';
+      let message;
+      if (code === 'layout-file-empty') {
+        message = 'The selected file was empty.';
+      } else {
+        message = 'Unable to parse layout file. Please ensure it is a fresh export from the 2D survey.';
+      }
       showStatus(message, 'error');
       alert(message);
     } finally {

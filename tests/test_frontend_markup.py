@@ -42,10 +42,12 @@ def test_fps_viewer_handles_pointer_lock_state() -> None:
         encoding="utf-8"
     )
     assert 'class="control-status"' in html
+    assert 'id="assetStatus"' in html
     assert "function resetMovementState()" in html
     assert "pointerlockerror" in html
     assert 'id="enter-walk"' in html
     assert 'id="load-gltf"' in html
+    assert 'id="resetAssetView"' in html
     assert "../shared/vendor/three/GLTFLoader.js" in html
     assert "./assets/dozenSidedStack-Body.gltf" in html
 
@@ -84,3 +86,14 @@ def test_fps_viewer_exposes_translation_snap_controls() -> None:
     assert "function applyTranslationSnap" in html
     assert "transformControls.setTranslationSnap(translationSnap);" in html
     assert "function hasActiveMovement()" in html
+
+
+def test_fps_viewer_reports_asset_scale_and_recenter_controls() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function deriveAssetScale" in html
+    assert "function setAssetStatus" in html
+    assert "resetAssetViewBtn" in html
+    assert "setAssetStatus('Unable to load the sample GLTF file." in html

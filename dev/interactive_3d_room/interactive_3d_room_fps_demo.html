@@ -106,6 +106,12 @@
       margin: 4px 0 0;
       min-height: 1.2em;
     }
+    .controls .asset-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
     .controls .control-status[data-tone="warn"] {
       color: #facc15;
     }
@@ -260,7 +266,11 @@
         </label>
         <button id="resetLayout">Reset to Default Room</button>
         <button id="load-gltf">Load Sample GLTF Asset</button>
-        <button id="focusAsset" disabled>Focus on Sample Asset</button>
+        <div class="asset-actions">
+          <button id="focusAsset" disabled>Frame Loaded Asset</button>
+          <button id="resetAssetView" disabled>Reset View to Asset</button>
+        </div>
+        <p class="control-status" id="assetStatus" aria-live="polite"></p>
       </div>
       <div class="controls">
         <label for="translationSnap">Translation Snap Increment
@@ -371,6 +381,8 @@
     const resetLayoutBtn = document.getElementById('resetLayout');
     const loadGltfBtn = document.getElementById('load-gltf');
     const focusAssetBtn = document.getElementById('focusAsset');
+    const resetAssetViewBtn = document.getElementById('resetAssetView');
+    const assetStatus = document.getElementById('assetStatus');
     const roomInfo = document.getElementById('roomInfo');
     const walkStatus = document.getElementById('walkStatus');
     const translationSnapInput = document.getElementById('translationSnap');
@@ -472,6 +484,12 @@
       if (!walkStatus) return;
       walkStatus.textContent = message;
       walkStatus.dataset.tone = tone;
+    }
+
+    function setAssetStatus(message, tone = 'neutral') {
+      if (!assetStatus) return;
+      assetStatus.textContent = message;
+      assetStatus.dataset.tone = tone;
     }
 
     function showWalkOverlay() {
@@ -1355,6 +1373,80 @@
       object.position.y = clamp(object.position.y, minY, maxY);
     }
 
+    function deriveAssetScale(sizeVec) {
+      const rawMax = Math.max(sizeVec.x, sizeVec.y, sizeVec.z);
+      if (!Number.isFinite(rawMax) || rawMax <= 0) {
+        return { scale: 1, note: 'Using fallback scale; asset bounding box unavailable.' };
+      }
+
+      const heuristics = [
+        { threshold: 5000, scale: 0.001, note: 'Converted from millimeters to meters based on bounding box size.' },
+        { threshold: 500, scale: 0.01, note: 'Converted from centimeters to meters based on bounding box size.' },
+        { threshold: 50, scale: 0.1, note: 'Converted from decimeters to meters based on bounding box size.' }
+      ];
+
+      for (const rule of heuristics) {
+        if (rawMax >= rule.threshold) {
+          return rule;
+        }
+      }
+
+      if (rawMax < 0.5) {
+        const target = 1;
+        const scale = clamp(target / Math.max(rawMax, 0.01), 1, 200);
+        return { scale, note: 'Auto-scaled small asset to improve visibility inside the room bounds.' };
+      }
+
+      return { scale: 1, note: 'Using original model units.' };
+    }
+
+    function describeAssetDimensions(sizeVec) {
+      const dims = ['x', 'y', 'z'].map(axis => {
+        const value = sizeVec[axis];
+        if (!Number.isFinite(value)) return '—';
+        return value >= 10 ? value.toFixed(1) : value.toFixed(2);
+      });
+      return `${dims[0]}m × ${dims[1]}m × ${dims[2]}m`;
+    }
+
+    function updateAssetButtonsState() {
+      if (focusAssetBtn) {
+        focusAssetBtn.disabled = !assetLoaded;
+      }
+      if (resetAssetViewBtn) {
+        resetAssetViewBtn.disabled = !assetLoaded;
+      }
+    }
+
+    function frameAssetView(options = {}) {
+      if (!assetLoaded) return;
+      pointerControls.unlock();
+      setHandMode(false, { silent: true });
+      resetMovementState();
+      const radius = Math.max(assetSize.x, assetSize.z);
+      const height = Math.max(assetSize.y, 1.6);
+      const distanceMultiplier = clamp(options.distanceMultiplier !== undefined ? options.distanceMultiplier : 2.2, 1.2, 6);
+      const elevationMultiplier = clamp(options.elevationMultiplier !== undefined ? options.elevationMultiplier : 0.8, 0.2, 3);
+      const azimuthOffset = clamp(options.azimuthOffset !== undefined ? options.azimuthOffset : 0, -radius * 0.75, radius * 0.75);
+      const target = assetAnchor.position.clone();
+      const distance = Math.max(radius * distanceMultiplier + 0.5, 2.5);
+      const offset = new THREE.Vector3(azimuthOffset, height * elevationMultiplier, distance);
+      const holder = pointerControls.getObject();
+      holder.position.copy(target.clone().add(offset));
+      holder.lookAt(target);
+      clampCamera();
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+      updateWalkUi();
+      scheduleWalkOverlayAutoHide();
+    }
+
+    function resetAssetView() {
+      if (!assetLoaded) return;
+      frameAssetView({ distanceMultiplier: 2.8, elevationMultiplier: 0.85 });
+      setWalkStatus('Camera reset to frame the loaded asset. Enter walk mode to explore again.', 'info');
+    }
+
     function repositionAssetIfNeeded() {
       if (!assetLoaded) return;
       const radius = Math.max(assetSize.x, assetSize.z) / 2;
@@ -1375,7 +1467,7 @@
       } else {
         transformControls.detach();
       }
-      focusAssetBtn.disabled = !assetLoaded;
+      updateAssetButtonsState();
     }
 
     const raycaster = new THREE.Raycaster();
@@ -1490,15 +1582,8 @@
 
     function focusOnAsset() {
       if (!assetLoaded) return;
-      pointerControls.unlock();
-      const radius = Math.max(assetSize.x, assetSize.z);
-      const target = assetAnchor.position.clone();
-      const offset = new THREE.Vector3(0, radius * 1.2 + assetSize.y, radius * 1.8 + 1.5);
-      const holder = pointerControls.getObject();
-      holder.position.copy(target.clone().add(offset));
-      holder.lookAt(target);
-      camera.position.set(0, 0, 0);
-      camera.rotation.set(0, 0, 0);
+      frameAssetView({ distanceMultiplier: 2.2, elevationMultiplier: 0.9 });
+      setWalkStatus('Framed the loaded asset. Enter walk mode to continue exploring.', 'info');
     }
 
     enterWalkBtn.addEventListener('click', () => {
@@ -1529,6 +1614,9 @@
     });
 
     focusAssetBtn.addEventListener('click', () => focusOnAsset());
+    if (resetAssetViewBtn) {
+      resetAssetViewBtn.addEventListener('click', () => resetAssetView());
+    }
 
     if (layoutImport) {
       layoutImport.addEventListener('change', async event => {
@@ -1565,10 +1653,13 @@
     initializeTranslationSnapControls();
 
     const loader = new GLTFLoader();
+    setAssetStatus('No GLTF asset loaded. Click “Load Sample GLTF Asset” to import.', 'neutral');
+    updateAssetButtonsState();
 
     function loadSampleAsset() {
       if (!loadGltfBtn) return;
       loadGltfBtn.disabled = true;
+      setAssetStatus('Loading sample GLTF asset…', 'info');
       loader.load(
         './assets/dozenSidedStack-Body.gltf',
         gltf => {
@@ -1577,6 +1668,7 @@
             console.error('GLTF load succeeded but no scene graph was found.', gltf);
             alert('Unable to load the sample GLTF scene. See console for details.');
             loadGltfBtn.disabled = false;
+            setAssetStatus('GLTF load succeeded but no scene graph was found.', 'warn');
             return;
           }
 
@@ -1592,8 +1684,9 @@
           const size = new THREE.Vector3();
           bbox.getCenter(center);
           bbox.getSize(size);
+
+          const { scale, note } = deriveAssetScale(size);
           root.position.sub(center);
-          const scale = 0.001; // FreeCAD export uses millimeters
           root.scale.setScalar(scale);
           assetSize = size.clone().multiplyScalar(scale);
           assetAnchor.clear();
@@ -1603,18 +1696,32 @@
           assetAnchor.position.set(0, baseY, 0);
           assetAnchor.userData.baseY = baseY;
           assetAnchor.userData.minY = baseY;
+          assetAnchor.userData.scale = scale;
+          assetAnchor.userData.scaleNote = note;
           selectable.splice(0, selectable.length, assetAnchor);
           assetLoaded = true;
           selectObject(assetAnchor);
+          updateAssetButtonsState();
           loadGltfBtn.disabled = false;
           loadGltfBtn.textContent = 'Reload Sample GLTF Asset';
           repositionAssetIfNeeded();
+          assetAnchor.updateMatrixWorld(true);
+          const dimensionSummary = describeAssetDimensions(assetSize);
+          setAssetStatus(`Loaded GLTF asset (${dimensionSummary}, scale ×${scale.toFixed(scale >= 1 ? 2 : 3)}). ${note}`, 'success');
+          console.info('Loaded GLTF asset', {
+            dimensions: dimensionSummary,
+            scale,
+            note,
+          });
+          resetAssetView();
         },
         undefined,
         error => {
           console.error('Failed to load GLTF asset', error);
           alert('Unable to load the sample GLTF file. See console for details.');
+          setAssetStatus('Unable to load the sample GLTF file. See console for details.', 'warn');
           loadGltfBtn.disabled = false;
+          updateAssetButtonsState();
         }
       );
     }

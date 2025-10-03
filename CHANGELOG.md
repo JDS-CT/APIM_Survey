@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T13:58:00Z
+- fix: complete step [p1] Harden the FPS GLTF loader with bounding-box diagnostics, scale heuristics, and UI status updates so invisible imports surface actionable feedback.
+- feat: complete step [p1] Auto-scale and frame loaded GLTF assets while adding a reset control that recenters the camera on demand for recovery.
+- test: complete step [p1] Extend frontend markup assertions to cover the asset status UI, reset control, and loader messaging hooks.
+
 ## 2025-10-03T12:34:00Z
 - fix: complete step [p1] Clamp the pointer-lock walk velocity to zero when no movement keys are held so the orbit and MWE viewers no longer drift while idle.
 - feat: complete step [p1] Restore a translation snap slider in the FPS demo that drives both TransformControls and Hand Mode nudges.

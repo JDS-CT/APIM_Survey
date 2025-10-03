@@ -249,9 +249,7 @@
     <nav>
       <a class="nav-link" href="../index.html">Home</a>
       <a class="nav-link" href="../room_survey_min/room_survey_min_v1.html">2D Survey</a>
-      <a class="nav-link" href="interactive_3d_room_v1.html">Orbit Viewer</a>
       <a class="nav-link active" href="interactive_3d_room_fps_demo.html">First-Person Demo</a>
-      <a class="nav-link" href="../test_objects/mwe_viewer.html">MWE Viewer</a>
     </nav>
   </header>
   <main>
@@ -319,6 +317,7 @@
     import { GLTFLoader } from '../shared/vendor/three/GLTFLoader.js';
 
     const mm2m = value => value / 1000;
+    const m2mm = value => value * 1000;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const toNumber = (value, fallback = 0) => {
       const num = Number(value);
@@ -330,11 +329,16 @@
     const DOOR_DEFAULT_THICKNESS_MM = 80;
     const DOOR_HEIGHT_MM = 2100;
 
+    const ASSET_FLOOR_ITEM_TYPE = 'gltfAsset';
+    const SAMPLE_ASSET_REF = 'sample/dozenSidedStack';
+    const SAMPLE_ASSET_ID = 'asset_sample';
+
     const FLOOR_ITEM_META = {
       floorBox: { label: 'Floor Box', wmm: 600, lmm: 600, color: 0x2e6fba, height: 0.5 },
       microscope: { label: 'Microscope', wmm: 2200, lmm: 1800, color: 0x8c5dd8, height: 2.0 },
       table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
-      pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 }
+      pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 },
+      [ASSET_FLOOR_ITEM_TYPE]: { label: 'GLTF Asset', wmm: 2000, lmm: 2000, color: 0x8b5cf6, height: 0.2 }
     };
 
     const HAND_MODE_TOGGLE_KEY = 'Control';
@@ -371,7 +375,7 @@
       doors: []
     };
 
-    const LAYOUT_STORAGE_KEY = 'room-fps-viewer.latest-layout';
+    const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';
 
     const rendererHost = document.getElementById('rendererHost');
     const walkOverlay = document.getElementById('walkOverlay');
@@ -674,6 +678,9 @@
       if (handled) {
         clampAsset(selectedObject);
         selectedObject.userData.baseY = selectedObject.position.y;
+        if (selectedObject === assetAnchor) {
+          syncAssetLayoutFromAnchor();
+        }
         scheduleWalkOverlayAutoHide();
       }
       return handled;
@@ -756,7 +763,9 @@
         y: toNumber(item.y, layout.room.Lmm / 2),
         w: toNumber(item.w !== undefined ? item.w : item.size, meta.wmm),
         l: toNumber(item.l !== undefined ? item.l : item.size, meta.lmm),
-        rotation: toNumber(item.rotation, 0)
+        rotation: toNumber(item.rotation, 0),
+        assetRef: typeof item.assetRef === 'string' ? item.assetRef : undefined,
+        elevation_mm: item.elevation_mm !== undefined ? toNumber(item.elevation_mm, 0) : undefined
       };
     }
 
@@ -914,7 +923,7 @@
         },
         floor_items: (layout.floor_items || []).map(item => {
           const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
-          return {
+          const snapshot = {
             id: item.id,
             type: item.type,
             x: toNumber(item.x, layout.room.Wmm / 2),
@@ -923,6 +932,11 @@
             l: toNumber(item.l, meta.lmm),
             rotation: toNumber(item.rotation, 0)
           };
+          if (item.assetRef) snapshot.assetRef = item.assetRef;
+          if (item.elevation_mm !== undefined) {
+            snapshot.elevation_mm = toNumber(item.elevation_mm, 0);
+          }
+          return snapshot;
         }),
         wall_items: (layout.wall_items || []).map(item => ({
           id: item.id,
@@ -964,7 +978,7 @@
       layout.wall_items = (layout.wall_items || []).map(normalizeWallItem);
     }
 
-    function ingestLayout(data, persistOptions = {}) {
+    async function ingestLayout(data, persistOptions = {}) {
       if (data.room) {
         const roomW = data.room.W !== undefined ? data.room.W : data.room.Wmm;
         const roomL = data.room.L !== undefined ? data.room.L : data.room.Lmm;
@@ -991,6 +1005,7 @@
       ensureLayoutIds();
       applyLayout();
       selectObject(null);
+      await ensureAssetFromLayout(persistOptions);
       persistLatest(persistOptions);
       if (supportsPointerLock) {
         setWalkStatus('Layout imported. Click “Enter Walk Mode” to explore.', 'neutral');
@@ -1003,6 +1018,93 @@
       const x = mm2m(xMm - layout.room.Wmm / 2);
       const z = mm2m(yMm - layout.room.Lmm / 2);
       return new THREE.Vector3(x, 0, z);
+    }
+
+    function worldToLayoutFloor(vector) {
+      const xMm = m2mm(vector.x) + layout.room.Wmm / 2;
+      const yMm = m2mm(vector.z) + layout.room.Lmm / 2;
+      return {
+        x: Math.round(clamp(xMm, 0, layout.room.Wmm)),
+        y: Math.round(clamp(yMm, 0, layout.room.Lmm))
+      };
+    }
+
+    function findAssetLayoutIndex() {
+      const items = layout.floor_items || [];
+      return items.findIndex(item => item && item.type === ASSET_FLOOR_ITEM_TYPE && item.assetRef === SAMPLE_ASSET_REF);
+    }
+
+    function getAssetLayoutEntry() {
+      const idx = findAssetLayoutIndex();
+      return idx >= 0 ? layout.floor_items[idx] : null;
+    }
+
+    function syncAssetLayoutFromAnchor(options = {}) {
+      if (!assetLoaded) return;
+      const { persist = true, persistOptions = {} } = options;
+      if (!Array.isArray(layout.floor_items)) {
+        layout.floor_items = [];
+      }
+      const position = assetAnchor.position.clone();
+      const { x, y } = worldToLayoutFloor(position);
+      const rotationDeg = Math.round(THREE.MathUtils.radToDeg(assetAnchor.rotation.y || 0));
+      const snapshot = {
+        id: SAMPLE_ASSET_ID,
+        type: ASSET_FLOOR_ITEM_TYPE,
+        assetRef: SAMPLE_ASSET_REF,
+        x,
+        y,
+        w: Math.round(m2mm(assetSize.x)),
+        l: Math.round(m2mm(assetSize.z)),
+        rotation: rotationDeg,
+        elevation_mm: Math.round(m2mm(position.y))
+      };
+      const idx = findAssetLayoutIndex();
+      if (idx >= 0) {
+        layout.floor_items[idx] = { ...layout.floor_items[idx], ...snapshot };
+      } else {
+        layout.floor_items.push(snapshot);
+      }
+      if (persist) {
+        persistLatest(persistOptions);
+      }
+    }
+
+    function applyAssetLayoutEntry(entry, options = {}) {
+      if (!assetLoaded || !entry) return;
+      const { persist = true, persistOptions = {} } = options;
+      const world = mmPointToWorld(
+        toNumber(entry.x, layout.room.Wmm / 2),
+        toNumber(entry.y, layout.room.Lmm / 2)
+      );
+      const elevation = entry.elevation_mm !== undefined
+        ? mm2m(toNumber(entry.elevation_mm, 0))
+        : assetAnchor.userData.baseY !== undefined
+          ? assetAnchor.userData.baseY
+          : assetAnchor.position.y;
+      assetAnchor.position.set(world.x, elevation, world.z);
+      assetAnchor.rotation.y = THREE.MathUtils.degToRad(toNumber(entry.rotation, 0));
+      assetAnchor.userData.baseY = elevation;
+      assetAnchor.userData.minY = assetAnchor.userData.minY !== undefined
+        ? Math.min(assetAnchor.userData.minY, elevation)
+        : elevation;
+      clampAsset(assetAnchor);
+      assetAnchor.updateMatrixWorld(true);
+      syncAssetLayoutFromAnchor({ persist, persistOptions });
+    }
+
+    async function ensureAssetFromLayout(persistOptions = {}) {
+      const entry = getAssetLayoutEntry();
+      if (!entry) return;
+      if (!assetLoaded) {
+        try {
+          await loadSampleAsset({ fromLayout: entry, persistOptions });
+        } catch (err) {
+          console.error('Failed to load sample asset from layout', err);
+        }
+      } else {
+        applyAssetLayoutEntry(entry, { persist: false });
+      }
     }
 
     function clearGroup(group) {
@@ -1125,6 +1227,9 @@
     function buildItems() {
       clearGroup(itemGroup);
       (layout.floor_items || []).forEach(item => {
+        if (item.type === ASSET_FLOOR_ITEM_TYPE) {
+          return;
+        }
         const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
         const w = mm2m(toNumber(item.w, meta.wmm));
         const l = mm2m(toNumber(item.l, meta.lmm));
@@ -1362,6 +1467,9 @@
       selectedObject.position.y = Math.max(minY, selectedObject.position.y);
       clampAsset(selectedObject);
       selectedObject.userData.baseY = selectedObject.position.y;
+      if (selectedObject === assetAnchor) {
+        syncAssetLayoutFromAnchor();
+      }
     });
 
     function clampAsset(object) {
@@ -1571,6 +1679,9 @@
       layout.custom_walls = (preset.custom_walls || []).map(normalizeCustomWall);
       layout.doors = (preset.doors || []).map(normalizeDoor);
       applyLayout();
+      if (assetLoaded) {
+        syncAssetLayoutFromAnchor({ persist: false, persistOptions });
+      }
       selectObject(null);
       persistLatest(persistOptions);
       if (supportsPointerLock) {
@@ -1627,7 +1738,7 @@
           const text = await file.text();
           const data = parseLayoutText(text);
           if (!data) throw new Error('layout-file-empty');
-          ingestLayout(data);
+          await ingestLayout(data);
         } catch (err) {
           console.error('Failed to parse layout JSON', err);
           if (err && err.cause) {
@@ -1646,7 +1757,9 @@
 
     if (loadGltfBtn) {
       loadGltfBtn.addEventListener('click', () => {
-        loadSampleAsset();
+        loadSampleAsset().catch(err => {
+          console.error('Failed to load sample GLTF asset', err);
+        });
       });
     }
 
@@ -1656,74 +1769,89 @@
     setAssetStatus('No GLTF asset loaded. Click “Load Sample GLTF Asset” to import.', 'neutral');
     updateAssetButtonsState();
 
-    function loadSampleAsset() {
-      if (!loadGltfBtn) return;
+    function loadSampleAsset(options = {}) {
+      const { fromLayout = null, persistOptions = {} } = options;
+      if (!loadGltfBtn) {
+        return Promise.resolve(false);
+      }
       loadGltfBtn.disabled = true;
       setAssetStatus('Loading sample GLTF asset…', 'info');
-      loader.load(
-        './assets/dozenSidedStack-Body.gltf',
-        gltf => {
-          const root = gltf.scene || (Array.isArray(gltf.scenes) ? gltf.scenes[0] : null);
-          if (!root) {
-            console.error('GLTF load succeeded but no scene graph was found.', gltf);
-            alert('Unable to load the sample GLTF scene. See console for details.');
-            loadGltfBtn.disabled = false;
-            setAssetStatus('GLTF load succeeded but no scene graph was found.', 'warn');
-            return;
-          }
-
-          root.traverse(node => {
-            if (node.isMesh) {
-              node.castShadow = false;
-              node.receiveShadow = true;
+      return new Promise((resolve, reject) => {
+        loader.load(
+          './assets/dozenSidedStack-Body.gltf',
+          gltf => {
+            const root = gltf.scene || (Array.isArray(gltf.scenes) ? gltf.scenes[0] : null);
+            if (!root) {
+              console.error('GLTF load succeeded but no scene graph was found.', gltf);
+              alert('Unable to load the sample GLTF scene. See console for details.');
+              loadGltfBtn.disabled = false;
+              setAssetStatus('GLTF load succeeded but no scene graph was found.', 'warn');
+              resolve(false);
+              return;
             }
-          });
 
-          const bbox = new THREE.Box3().setFromObject(root);
-          const center = new THREE.Vector3();
-          const size = new THREE.Vector3();
-          bbox.getCenter(center);
-          bbox.getSize(size);
+            root.traverse(node => {
+              if (node.isMesh) {
+                node.castShadow = false;
+                node.receiveShadow = true;
+              }
+            });
 
-          const { scale, note } = deriveAssetScale(size);
-          root.position.sub(center);
-          root.scale.setScalar(scale);
-          assetSize = size.clone().multiplyScalar(scale);
-          assetAnchor.clear();
-          assetAnchor.add(root);
-          assetAnchor.visible = true;
-          const baseY = assetSize.y / 2;
-          assetAnchor.position.set(0, baseY, 0);
-          assetAnchor.userData.baseY = baseY;
-          assetAnchor.userData.minY = baseY;
-          assetAnchor.userData.scale = scale;
-          assetAnchor.userData.scaleNote = note;
-          selectable.splice(0, selectable.length, assetAnchor);
-          assetLoaded = true;
-          selectObject(assetAnchor);
-          updateAssetButtonsState();
-          loadGltfBtn.disabled = false;
-          loadGltfBtn.textContent = 'Reload Sample GLTF Asset';
-          repositionAssetIfNeeded();
-          assetAnchor.updateMatrixWorld(true);
-          const dimensionSummary = describeAssetDimensions(assetSize);
-          setAssetStatus(`Loaded GLTF asset (${dimensionSummary}, scale ×${scale.toFixed(scale >= 1 ? 2 : 3)}). ${note}`, 'success');
-          console.info('Loaded GLTF asset', {
-            dimensions: dimensionSummary,
-            scale,
-            note,
-          });
-          resetAssetView();
-        },
-        undefined,
-        error => {
-          console.error('Failed to load GLTF asset', error);
-          alert('Unable to load the sample GLTF file. See console for details.');
-          setAssetStatus('Unable to load the sample GLTF file. See console for details.', 'warn');
-          loadGltfBtn.disabled = false;
-          updateAssetButtonsState();
-        }
-      );
+            const bbox = new THREE.Box3().setFromObject(root);
+            const center = new THREE.Vector3();
+            const size = new THREE.Vector3();
+            bbox.getCenter(center);
+            bbox.getSize(size);
+
+            const { scale, note } = deriveAssetScale(size);
+            root.position.sub(center);
+            root.scale.setScalar(scale);
+            assetSize = size.clone().multiplyScalar(scale);
+            assetAnchor.clear();
+            assetAnchor.add(root);
+            assetAnchor.visible = true;
+            const baseY = assetSize.y / 2;
+            assetAnchor.position.set(0, baseY, 0);
+            assetAnchor.userData.baseY = baseY;
+            assetAnchor.userData.minY = baseY;
+            assetAnchor.userData.scale = scale;
+            assetAnchor.userData.scaleNote = note;
+            assetAnchor.userData.assetRef = SAMPLE_ASSET_REF;
+            assetAnchor.userData.assetId = SAMPLE_ASSET_ID;
+            selectable.splice(0, selectable.length, assetAnchor);
+            assetLoaded = true;
+            selectObject(assetAnchor);
+            updateAssetButtonsState();
+            loadGltfBtn.disabled = false;
+            loadGltfBtn.textContent = 'Reload Sample GLTF Asset';
+            repositionAssetIfNeeded();
+            assetAnchor.updateMatrixWorld(true);
+            const dimensionSummary = describeAssetDimensions(assetSize);
+            if (fromLayout) {
+              applyAssetLayoutEntry(fromLayout, { persist: false, persistOptions });
+            } else {
+              syncAssetLayoutFromAnchor({ persist: true, persistOptions });
+            }
+            setAssetStatus(`Loaded GLTF asset (${dimensionSummary}, scale ×${scale.toFixed(scale >= 1 ? 2 : 3)}). ${note}`, 'success');
+            console.info('Loaded GLTF asset', {
+              dimensions: dimensionSummary,
+              scale,
+              note,
+            });
+            resetAssetView();
+            resolve(true);
+          },
+          undefined,
+          error => {
+            console.error('Failed to load GLTF asset', error);
+            alert('Unable to load the sample GLTF file. See console for details.');
+            setAssetStatus('Unable to load the sample GLTF file. See console for details.', 'warn');
+            loadGltfBtn.disabled = false;
+            updateAssetButtonsState();
+            reject(error);
+          }
+        );
+      });
     }
 
     function onWindowResize() {
@@ -1743,7 +1871,7 @@
         const persistOptions = restored.source === 'server'
           ? { local: true, remote: false }
           : { local: true, remote: true };
-        ingestLayout(restored.data, persistOptions);
+        await ingestLayout(restored.data, persistOptions);
       }
     })();
   </script>

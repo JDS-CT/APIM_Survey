@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T12:34:00Z
+- fix: complete step [p1] Clamp the pointer-lock walk velocity to zero when no movement keys are held so the orbit and MWE viewers no longer drift while idle.
+- feat: complete step [p1] Restore a translation snap slider in the FPS demo that drives both TransformControls and Hand Mode nudges.
+- test: complete step [p1] Extend the frontend markup assertions to cover the snap slider hooks and the new idle-movement guard.
+
 ## 2025-10-03T11:26:46Z
 - fix: complete step [p1] Investigate and resolve the First-Person Demo controls mismatch by trapping Space/Shift scrolling, tracking viewport focus, and keeping the published copy in sync with Hand Mode guidance.
 - test: complete step [p1] Extend the FPS frontend markup assertions to cover the new navigation guard helper and refreshed control instructions.

@@ -121,6 +121,9 @@
     input[type="file"] {
       font: inherit;
     }
+    input[type="range"] {
+      width: 100%;
+    }
     button {
       appearance: none;
       font: inherit;
@@ -144,6 +147,9 @@
       cursor: not-allowed;
       transform: none;
       box-shadow: none;
+    }
+    .controls .slider-value {
+      font-weight: 600;
     }
     .viewport {
       position: relative;
@@ -257,6 +263,12 @@
         <button id="focusAsset" disabled>Focus on Sample Asset</button>
       </div>
       <div class="controls">
+        <label for="translationSnap">Translation Snap Increment
+          <input id="translationSnap" type="range" min="1" max="50" step="1" value="5" />
+        </label>
+        <p class="control-status" id="translationSnapHint">Hand Mode nudges &amp; gizmo moves use <span class="slider-value" id="translationSnapValue">5&nbsp;cm</span> steps.</p>
+      </div>
+      <div class="controls">
         <button id="enter-walk">Enter Walk Mode</button>
         <button id="resetWalk">Reset Walk Position</button>
         <p class="control-status" id="walkStatus" aria-live="polite"></p>
@@ -316,10 +328,14 @@
     };
 
     const HAND_MODE_TOGGLE_KEY = 'Control';
-    const HAND_MODE_TRANSLATE_STEP = 0.1;
-    const HAND_MODE_VERTICAL_STEP = 0.05;
     const HAND_MODE_ROTATE_STEP = THREE.MathUtils.degToRad(5);
     const WALK_OVERLAY_AUTO_HIDE_MS = 1800;
+    const MIN_TRANSLATION_SNAP = 0.01;
+    const MAX_TRANSLATION_SNAP = 0.5;
+    const DEFAULT_TRANSLATION_SNAP = 0.05;
+    let translationSnap = DEFAULT_TRANSLATION_SNAP;
+    let handModeTranslateStep = DEFAULT_TRANSLATION_SNAP;
+    let handModeVerticalStep = DEFAULT_TRANSLATION_SNAP;
 
     const DEFAULT_ROOM_PRESET = () => ({
       room: { W: 6000, L: 8000 },
@@ -357,6 +373,8 @@
     const focusAssetBtn = document.getElementById('focusAsset');
     const roomInfo = document.getElementById('roomInfo');
     const walkStatus = document.getElementById('walkStatus');
+    const translationSnapInput = document.getElementById('translationSnap');
+    const translationSnapValue = document.getElementById('translationSnapValue');
     const viewportSection = document.querySelector('.viewport');
     const NAVIGATION_KEYS = new Set(['Space', 'ShiftLeft', 'ShiftRight']);
     const INTERACTIVE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
@@ -399,7 +417,7 @@
     const transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.setMode('translate');
     transformControls.showY = true;
-    transformControls.setTranslationSnap(0.05);
+    transformControls.setTranslationSnap(translationSnap);
     scene.add(transformControls);
     scene.add(pointerControls.getObject());
 
@@ -444,6 +462,10 @@
       moveState.down = false;
       velocity.set(0, 0, 0);
       direction.set(0, 0, 0);
+    }
+
+    function hasActiveMovement() {
+      return moveState.forward || moveState.back || moveState.left || moveState.right || moveState.up || moveState.down;
     }
 
     function setWalkStatus(message, tone = 'neutral') {
@@ -514,6 +536,39 @@
       if (resetWalkBtn) resetWalkBtn.disabled = false;
     }
 
+    function formatSnapDisplay(value) {
+      const centimeters = value * 100;
+      const precision = Math.abs(centimeters % 1) < 1e-6 ? 0 : 1;
+      return `${centimeters.toFixed(precision)} cm`;
+    }
+
+    function applyTranslationSnap(value) {
+      const clamped = clamp(value, MIN_TRANSLATION_SNAP, MAX_TRANSLATION_SNAP);
+      translationSnap = clamped;
+      handModeTranslateStep = clamped;
+      handModeVerticalStep = clamped;
+      transformControls.setTranslationSnap(translationSnap);
+      if (translationSnapValue) {
+        translationSnapValue.textContent = formatSnapDisplay(translationSnap);
+      }
+    }
+
+    function initializeTranslationSnapControls() {
+      if (!translationSnapInput) {
+        applyTranslationSnap(translationSnap);
+        return;
+      }
+      translationSnapInput.value = `${Math.round(translationSnap * 100)}`;
+      applyTranslationSnap(translationSnap);
+      translationSnapInput.addEventListener('input', event => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        const centimeters = Number(target.value);
+        if (!Number.isFinite(centimeters)) return;
+        applyTranslationSnap(centimeters / 100);
+      });
+    }
+
     function setHandMode(active, options = {}) {
       const { silent = false, showOverlay = false } = options;
       if (handMode === active) {
@@ -541,7 +596,7 @@
           hideWalkOverlay();
         }
         if (!silent) {
-          setWalkStatus('Hand Mode active — drag gizmos or tap WASDQE/Space/Shift to adjust the selected object.', 'info');
+          setWalkStatus('Hand Mode active — drag gizmos or tap WASDQE/Space/Shift to adjust the selected object. Adjust the Translation Snap slider to change the step size.', 'info');
         }
       } else {
         if (!silent) {
@@ -559,8 +614,8 @@
     function adjustSelectedObjectFromHandMode(event) {
       if (!handMode || !selectedObject) return false;
       const fastMultiplier = event.altKey ? 5 : 1;
-      const step = HAND_MODE_TRANSLATE_STEP * fastMultiplier;
-      const verticalStep = HAND_MODE_VERTICAL_STEP * fastMultiplier;
+      const step = handModeTranslateStep * fastMultiplier;
+      const verticalStep = handModeVerticalStep * fastMultiplier;
       const rotateStep = HAND_MODE_ROTATE_STEP * fastMultiplier;
       let handled = false;
       switch (event.code) {
@@ -1119,18 +1174,27 @@
         velocity.y -= velocity.y * 10 * delta;
         velocity.z -= velocity.z * 10 * delta;
 
-        direction.z = Number(moveState.forward) - Number(moveState.back);
-        direction.x = Number(moveState.right) - Number(moveState.left);
-        direction.y = Number(moveState.up) - Number(moveState.down);
-        direction.normalize();
+        if (hasActiveMovement()) {
+          direction.z = Number(moveState.forward) - Number(moveState.back);
+          direction.x = Number(moveState.right) - Number(moveState.left);
+          direction.y = Number(moveState.up) - Number(moveState.down);
+          const lengthSq = direction.lengthSq();
+          if (lengthSq > 0) {
+            direction.normalize();
+            if (moveState.forward || moveState.back) velocity.z -= direction.z * speed * delta;
+            if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+            if (moveState.up || moveState.down) velocity.y += direction.y * speed * delta;
+          }
+        } else {
+          velocity.set(0, 0, 0);
+          direction.set(0, 0, 0);
+        }
 
-        if (moveState.forward || moveState.back) velocity.z -= direction.z * speed * delta;
-        if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
-        if (moveState.up || moveState.down) velocity.y += direction.y * speed * delta;
-
-        pointerControls.moveRight(-velocity.x * delta);
-        pointerControls.moveForward(-velocity.z * delta);
-        pointerControls.getObject().position.y += velocity.y * delta;
+        if (velocity.lengthSq() > 0) {
+          pointerControls.moveRight(-velocity.x * delta);
+          pointerControls.moveForward(-velocity.z * delta);
+          pointerControls.getObject().position.y += velocity.y * delta;
+        }
         clampCamera();
       }
       renderer.render(scene, camera);
@@ -1497,6 +1561,8 @@
         loadSampleAsset();
       });
     }
+
+    initializeTranslationSnapControls();
 
     const loader = new GLTFLoader();
 

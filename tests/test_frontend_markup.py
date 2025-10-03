@@ -56,6 +56,8 @@ def test_fps_viewer_supports_hand_mode_and_vertical_translation() -> None:
     )
 
     assert "const HAND_MODE_TOGGLE_KEY" in html
+    assert "let handModeTranslateStep" in html
+    assert "let handModeVerticalStep" in html
     assert "transformControls.showY = true" in html
     assert "scheduleWalkOverlayAutoHide" in html
     assert "velocity.y += direction.y * speed * delta" in html
@@ -70,3 +72,15 @@ def test_fps_viewer_traps_space_scroll_and_updates_controls_copy() -> None:
     assert "function maybePreventNavigationKey" in html
     assert "Press <strong>Ctrl</strong> to toggle <strong>Hand Mode</strong>" in html
     assert "Hold <strong>Alt</strong> and drag" in html
+
+
+def test_fps_viewer_exposes_translation_snap_controls() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="translationSnap"' in html
+    assert 'id="translationSnapValue"' in html
+    assert "function applyTranslationSnap" in html
+    assert "transformControls.setTranslationSnap(translationSnap);" in html
+    assert "function hasActiveMovement()" in html

@@ -6,14 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../shared/styles/glass_light_theme.css" />
   <link rel="stylesheet" href="../shared/styles/glass_dark_theme.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/"
-      }
-    }
-  </script>
   <style>
     :root {
       color-scheme: dark;
@@ -298,10 +290,10 @@
   </main>
 
   <script type="module">
-    import * as THREE from 'three';
-    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-    import { TransformControls } from 'three/addons/controls/TransformControls.js';
-    import { X3DLoader } from 'three/addons/loaders/X3DLoader.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.159/build/three.module.js';
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/PointerLockControls.js';
+    import { TransformControls } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/controls/TransformControls.js';
+    import { X3DLoader } from 'https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/loaders/X3DLoader.js';
 
     const mm2m = value => value / 1000;
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -1259,7 +1251,7 @@
     function loadSampleAsset() {
       loadAssetBtn.disabled = true;
       loader.load(
-        '../../resources/testObjects/dozenSidedStack/dozenSidedStack-Body.x3d',
+        './dozenSidedStack-Body.x3d',
         object => {
           const bbox = new THREE.Box3().setFromObject(object);
           const center = new THREE.Vector3();

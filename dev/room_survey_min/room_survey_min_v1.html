@@ -785,6 +785,29 @@ function snapPoint(pt) {
   return { x: snapValue(pt.x), y: snapValue(pt.y) };
 }
 
+function resnapAll() {
+  state.floorItems.forEach(item => {
+    if (typeof item.x === 'number') item.x = snapValue(item.x);
+    if (typeof item.y === 'number') item.y = snapValue(item.y);
+  });
+  state.wallItems.forEach(item => {
+    if (item.type === 'socket') {
+      if (typeof item.s === 'number') item.s = snapValue(item.s);
+      if (typeof item.h === 'number') item.h = snapValue(item.h);
+    }
+  });
+  state.customWalls.forEach(wall => {
+    if (typeof wall.x1 === 'number') wall.x1 = snapValue(wall.x1);
+    if (typeof wall.y1 === 'number') wall.y1 = snapValue(wall.y1);
+    if (typeof wall.x2 === 'number') wall.x2 = snapValue(wall.x2);
+    if (typeof wall.y2 === 'number') wall.y2 = snapValue(wall.y2);
+  });
+  state.doors.forEach(door => {
+    if (typeof door.offset === 'number') door.offset = snapValue(door.offset);
+    if (typeof door.width === 'number') door.width = snapValue(door.width);
+  });
+}
+
 function recomputeScale() {
   const maxWpx = 800, maxLpx = 520;
   const sx = maxWpx / state.Wmm;
@@ -1598,6 +1621,7 @@ applyBtn.addEventListener('click', () => {
   state.imperial = imperialChk.checked;
   state.snap = state.imperial ? 150 : Math.max(10, Number(snapInput.value || 100));
   snapInput.value = state.snap;
+  resnapAll();
   recomputeScale();
   clampStateToRoom();
   render();
@@ -1607,6 +1631,8 @@ imperialChk.addEventListener('change', () => {
   state.imperial = imperialChk.checked;
   state.snap = state.imperial ? 150 : Math.max(10, Number(snapInput.value || 100));
   snapInput.value = state.snap;
+  resnapAll();
+  clampStateToRoom();
   drawGrid();
   render();
 });
@@ -1614,6 +1640,8 @@ imperialChk.addEventListener('change', () => {
 snapInput.addEventListener('change', () => {
   if (state.imperial) return;
   state.snap = Math.max(10, Number(snapInput.value || 100));
+  resnapAll();
+  clampStateToRoom();
   drawGrid();
   render();
 });

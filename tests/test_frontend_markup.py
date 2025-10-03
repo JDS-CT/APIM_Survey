@@ -102,3 +102,34 @@ def test_fps_viewer_reports_asset_scale_and_recenter_controls() -> None:
     assert "function setAssetStatus" in html
     assert "resetAssetViewBtn" in html
     assert "setAssetStatus('Unable to load the sample GLTF file." in html
+
+
+def test_room_survey_exposes_cable_controls_and_rendering() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="cableControls"' in html
+    assert "const CABLE_CATALOG_URL" in html
+    assert "function renderCables()" in html
+    assert "cables: state.cables.map" in html
+
+
+def test_room_survey_exposes_cable_bend_points() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function insertCableBendPoint" in html
+    assert "function handleCableBendDown" in html
+    assert "data-bend-index" in html
+
+
+def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const CABLE_CATALOG_URL" in html
+    assert "const CABLE_COLORS" in html
+    assert "async function refreshCableMeshes" in html

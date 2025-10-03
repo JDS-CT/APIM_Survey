@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T02:20:00Z
+- fix: complete step [p1] Trace why the FPS viewer walk/reset buttons stalled by surfacing pointer-lock failures, disabling walk mode when unsupported, and updating the HUD messaging.
+- fix: complete step [p1] Restore the first-person camera anchor by clearing move state on layout loads, pointer-lock unlocks, and resets so the scene stops drifting toward the viewer.
+- test: extend frontend markup checks to ensure the FPS demo ships the walk status element, resetMovementState helper, and pointer-lock error handler wiring.
+
 ## 2025-10-03T01:35:44Z
 - fix: complete step [p1] Reproduce the `default_room.json` import failure and harden the parser with a fallback slice so legacy exports no longer trigger the generic alert.
 - fix: complete step [p1] Update the orbit viewer loader to preserve furniture transforms by normalizing incoming layout payloads instead of resetting to presets.

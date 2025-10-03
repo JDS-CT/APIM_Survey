@@ -287,6 +287,12 @@
 
   <script>
 
+const X3D_NS = 'http://www.web3d.org/specifications/x3d-namespace';
+
+function createX3DElement(tagName) {
+  return document.createElementNS(X3D_NS, tagName);
+}
+
 const mm2m = v => v / 1000.0;
 const FT8_MM = 2438.4; // 8 feet
 const Hm = mm2m(FT8_MM);
@@ -634,7 +640,7 @@ function buildGrid(Wm, Lm) {
   }
   for (let x = 0; x <= spanX; x += 1) addLine([x, 0, 0], [x, 0, spanZ]);
   for (let z = 0; z <= spanZ; z += 1) addLine([0, 0, z], [spanX, 0, z]);
-  const coordEl = document.createElement('Coordinate');
+  const coordEl = createX3DElement('Coordinate');
   coordEl.setAttribute('point', coords.map(p => p.join(' ')).join(' '));
   while (gridLines.firstChild) gridLines.removeChild(gridLines.firstChild);
   gridLines.appendChild(coordEl);
@@ -654,14 +660,14 @@ function fitView(Wm, Lm, Hm) {
 }
 
 function createBoxShape(length, height, depth, color, transparency = 0.15) {
-  const shape = document.createElement('Shape');
-  const app = document.createElement('Appearance');
-  const material = document.createElement('Material');
+  const shape = createX3DElement('Shape');
+  const app = createX3DElement('Appearance');
+  const material = createX3DElement('Material');
   material.setAttribute('diffuseColor', color);
   material.setAttribute('transparency', transparency);
   app.appendChild(material);
   shape.appendChild(app);
-  const box = document.createElement('Box');
+  const box = createX3DElement('Box');
   box.setAttribute('size', `${Math.max(length, 0.01)} ${Math.max(height, 0.01)} ${Math.max(depth, 0.01)}`);
   shape.appendChild(box);
   return shape;
@@ -679,7 +685,7 @@ function renderWalls3d() {
     { length: Lm, thickness, x: Wm - thickness / 2, z: Lm / 2, rotation: Math.PI / 2 }
   ];
   baseWalls.forEach(w => {
-    const tf = document.createElement('Transform');
+    const tf = createX3DElement('Transform');
     tf.setAttribute('translation', `${w.x} ${Hm / 2} ${w.z}`);
     if (w.rotation) tf.setAttribute('rotation', `0 1 0 ${w.rotation}`);
     tf.appendChild(createBoxShape(w.length, Hm, w.thickness, WALL_COLOR, 0.25));
@@ -696,7 +702,7 @@ function renderWalls3d() {
     const length = mm2m(geom.length);
     const thick = mm2m(toNumber(wall.thickness, DEFAULT_WALL_THICKNESS_MM));
     const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
-    const tf = document.createElement('Transform');
+    const tf = createX3DElement('Transform');
     tf.setAttribute('translation', `${center.x} ${Hm / 2} ${center.z}`);
     tf.setAttribute('rotation', `0 1 0 ${angle}`);
     tf.appendChild(createBoxShape(length, Hm, thick, CUSTOM_WALL_COLOR, 0.15));
@@ -718,7 +724,7 @@ function renderDoors3d() {
     const length = mm2m(Math.min(geom.length, Math.abs(door.width || 900)));
     const thick = mm2m(toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM));
     const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
-    const tf = document.createElement('Transform');
+    const tf = createX3DElement('Transform');
     tf.setAttribute('translation', `${center.x} ${DOOR_HEIGHT_M / 2} ${center.z}`);
     tf.setAttribute('rotation', `0 1 0 ${angle}`);
     tf.appendChild(createBoxShape(length, DOOR_HEIGHT_M, thick, DOOR_COLOR, 0.1));
@@ -736,7 +742,7 @@ function renderItems3d() {
     const h = meta.height || 0.8;
     const x = mm2m(toNumber(item.x, layout.room.Wmm / 2));
     const z = mm2m(toNumber(item.y, layout.room.Lmm / 2));
-    const tf = document.createElement('Transform');
+    const tf = createX3DElement('Transform');
     tf.setAttribute('translation', `${x} ${h / 2} ${z}`);
     const rot = toNumber(item.rotation, 0);
     if (rot) tf.setAttribute('rotation', `0 1 0 ${(rot * Math.PI) / 180}`);

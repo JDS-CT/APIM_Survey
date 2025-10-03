@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-10-03T00:58:56Z
+- fix: complete step [p1] Compare the orbit viewer markup against the working X3D MWE to pinpoint missing runtime namespace usage.
+- fix: complete step [p1] Refactor interactive_3d_room_v1.html to create X3D nodes with document.createElementNS so room geometry renders.
+- test: complete step [p1] Guard the namespace helper by asserting interactive_3d_room_v1.html references createX3DElement for key X3D tags.
+
 ## 2025-10-03T01:10Z
 - fix: complete step [p1] Investigate why the FPS viewer prototype was not persisting imported layouts and confirm server storage paths.
 - feat: complete step [p1] Implement layout persistence (local storage + server sync) for the FPS viewer and trigger it after imports and resets.

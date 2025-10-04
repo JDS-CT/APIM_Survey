@@ -15,6 +15,27 @@ lives under `dev/`, and the landing page links to the three supported flows:
 Retired experiments (including the orbiting X3D viewer and MWE) now live in
 `dev/archive/` to keep the navigation focused.
 
+## Design Principles
+
+**Why make this instead of simply using FreeCAD in the first place?**
+FreeCAD is not installed on every company workstation, and the survey workflow
+needs to run in any modern browser without extra provisioning. Delivering a
+focused web experience lets surveyors capture measurements, embed custom notes,
+and trigger follow-up tasks directly in a purpose-built UI while still exporting
+data that other systems can consume. It keeps the scope limited to survey needs
+while leaving heavyweight CAD adjustments to downstream tools.
+
+**Why not simply use the company CAD drawings of the system to provide one
+example room layout to customers?**  
+Shipping a single canonical layout discourages teams from validating their own
+spaces. Repeated installations have shown that facilities often discover power,
+HVAC, or clearance issues only after technicians arrive, turning "simple"
+installations into costly rework. Collecting detailed room data early takes a
+few extra minutes during surveys but routinely prevents follow-up visits,
+replacement parts, and multi-day delays that can easily exceed $10,000. The
+prototype encourages collaborative review, captures context such as temporary
+sensor placements, and surfaces issues before the install truck leaves the dock.
+
 ## Running the prototype server
 
 The Python standard-library server in `dev/server.py` serves the entire `dev/`

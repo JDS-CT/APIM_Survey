@@ -325,7 +325,8 @@
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const ROOM_HEIGHT_MM = 2438.4; // 8 ft
+    const ROOM_HEIGHT_MM = 3000; // align with survey default (3 m)
+    const HUMAN_EYE_HEIGHT_M = 1.75; // ~5'9" eye level for first-person scale
     const DEFAULT_WALL_THICKNESS_MM = 200;
     const DOOR_DEFAULT_THICKNESS_MM = 80;
     const DOOR_HEIGHT_MM = 2100;
@@ -516,7 +517,7 @@
     }
 
     const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 100);
-    camera.position.set(0, 1.6, 5);
+    camera.position.set(0, HUMAN_EYE_HEIGHT_M, 5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -549,6 +550,7 @@
     const wallItemGroup = new THREE.Group();
     const itemGroup = new THREE.Group();
     const cableGroup = new THREE.Group();
+    const scaleMarkerGroup = new THREE.Group();
     const assetAnchor = new THREE.Group();
     assetAnchor.visible = false;
     assetAnchor.name = 'SampleAssetAnchor';
@@ -558,6 +560,7 @@
     scene.add(wallItemGroup);
     scene.add(itemGroup);
     scene.add(cableGroup);
+    scene.add(scaleMarkerGroup);
     scene.add(assetAnchor);
 
     const selectable = [];
@@ -1594,6 +1597,23 @@
       }
     }
 
+    function disposeMaterial(material) {
+      if (!material) return;
+      if (Array.isArray(material)) {
+        material.forEach(disposeMaterial);
+        return;
+      }
+      if (material.map && typeof material.map.dispose === 'function') {
+        material.map.dispose();
+      }
+      if (material.alphaMap && typeof material.alphaMap.dispose === 'function') {
+        material.alphaMap.dispose();
+      }
+      if (typeof material.dispose === 'function') {
+        material.dispose();
+      }
+    }
+
     function clearGroup(group) {
       for (let i = group.children.length - 1; i >= 0; i -= 1) {
         const child = group.children[i];
@@ -1602,13 +1622,7 @@
           child.geometry.dispose();
         }
         if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => {
-              if (m && typeof m.dispose === 'function') m.dispose();
-            });
-          } else if (typeof child.material.dispose === 'function') {
-            child.material.dispose();
-          }
+          disposeMaterial(child.material);
         }
       }
     }
@@ -1630,6 +1644,8 @@
       grid.position.y = 0.002;
       floorGroup.add(grid);
 
+      buildScaleMarkers(floorW, floorL);
+
       const minX = -floorW / 2 + 0.25;
       const maxX = floorW / 2 - 0.25;
       const minZ = -floorL / 2 + 0.25;
@@ -1637,6 +1653,88 @@
       walkBounds = { minX, maxX, minZ, maxZ, minY: 0.1, maxY: mm2m(ROOM_HEIGHT_MM) - 0.2 };
       const midHeight = (walkBounds.maxY + walkBounds.minY) / 2;
       orbitTarget.set(0, midHeight, 0);
+    }
+
+    function buildScaleMarkers(floorW, floorL) {
+      clearGroup(scaleMarkerGroup);
+      const meter = 1;
+      const baseColor = 0x1f2937;
+      const markerMat = new THREE.LineBasicMaterial({ color: baseColor, linewidth: 1, transparent: true, opacity: 0.9 });
+
+      const verticalBaseX = -floorW / 2 - 0.45;
+      const verticalBaseZ = -floorL / 2 + 0.45;
+      const verticalGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(verticalBaseX, 0, verticalBaseZ),
+        new THREE.Vector3(verticalBaseX, meter, verticalBaseZ)
+      ]);
+      const verticalLine = new THREE.Line(verticalGeom, markerMat.clone());
+      scaleMarkerGroup.add(verticalLine);
+
+      const verticalTicksGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(verticalBaseX - 0.08, 0, verticalBaseZ),
+        new THREE.Vector3(verticalBaseX + 0.08, 0, verticalBaseZ),
+        new THREE.Vector3(verticalBaseX - 0.08, meter, verticalBaseZ),
+        new THREE.Vector3(verticalBaseX + 0.08, meter, verticalBaseZ)
+      ]);
+      const verticalTicks = new THREE.LineSegments(verticalTicksGeom, markerMat.clone());
+      scaleMarkerGroup.add(verticalTicks);
+
+      const horizontalBaseX = -floorW / 2 + 0.45;
+      const horizontalBaseZ = -floorL / 2 - 0.45;
+      const horizontalGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(horizontalBaseX, 0.02, horizontalBaseZ),
+        new THREE.Vector3(horizontalBaseX + meter, 0.02, horizontalBaseZ)
+      ]);
+      const horizontalLine = new THREE.Line(horizontalGeom, markerMat.clone());
+      scaleMarkerGroup.add(horizontalLine);
+
+      const horizontalTicksGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(horizontalBaseX, 0.02, horizontalBaseZ - 0.08),
+        new THREE.Vector3(horizontalBaseX, 0.02, horizontalBaseZ + 0.08),
+        new THREE.Vector3(horizontalBaseX + meter, 0.02, horizontalBaseZ - 0.08),
+        new THREE.Vector3(horizontalBaseX + meter, 0.02, horizontalBaseZ + 0.08)
+      ]);
+      const horizontalTicks = new THREE.LineSegments(horizontalTicksGeom, markerMat.clone());
+      scaleMarkerGroup.add(horizontalTicks);
+
+      const verticalLabel = createLabelSprite('1 m');
+      verticalLabel.center.set(0.5, 0);
+      verticalLabel.position.set(verticalBaseX, meter + 0.05, verticalBaseZ);
+      verticalLabel.scale.set(0.8, 0.35, 1);
+      verticalLabel.material.depthTest = false;
+      verticalLabel.renderOrder = 10;
+      scaleMarkerGroup.add(verticalLabel);
+
+      const horizontalLabel = createLabelSprite('1 m');
+      horizontalLabel.center.set(0, 0.5);
+      horizontalLabel.position.set(horizontalBaseX + meter + 0.05, 0.08, horizontalBaseZ);
+      horizontalLabel.scale.set(0.8, 0.35, 1);
+      horizontalLabel.material.depthTest = false;
+      horizontalLabel.renderOrder = 10;
+      scaleMarkerGroup.add(horizontalLabel);
+    }
+
+    function createLabelSprite(text) {
+      const canvas = document.createElement('canvas');
+      const width = 256;
+      const height = 128;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, width, height);
+      ctx.font = 'bold 96px "Inter", "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 16;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.strokeText(text, width / 2, height / 2);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.fillText(text, width / 2, height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      return sprite;
     }
 
     function buildWalls() {
@@ -1815,7 +1913,7 @@
       const cameraHolder = pointerControls.getObject();
       setHandMode(false, { silent: true });
       resetMovementState();
-      cameraHolder.position.set(walkBounds.minX + 0.6, 1.6, walkBounds.minZ + 1.2);
+      cameraHolder.position.set(walkBounds.minX + 0.6, HUMAN_EYE_HEIGHT_M, walkBounds.minZ + 1.2);
       cameraHolder.rotation.set(0, 0, 0);
       camera.position.set(0, 0, 0);
       camera.rotation.set(0, 0, 0);
@@ -2073,7 +2171,7 @@
       setHandMode(false, { silent: true });
       resetMovementState();
       const radius = Math.max(assetSize.x, assetSize.z);
-      const height = Math.max(assetSize.y, 1.6);
+      const height = Math.max(assetSize.y, HUMAN_EYE_HEIGHT_M);
       const distanceMultiplier = clamp(options.distanceMultiplier !== undefined ? options.distanceMultiplier : 2.2, 1.2, 6);
       const elevationMultiplier = clamp(options.elevationMultiplier !== undefined ? options.elevationMultiplier : 0.8, 0.2, 3);
       const azimuthOffset = clamp(options.azimuthOffset !== undefined ? options.azimuthOffset : 0, -radius * 0.75, radius * 0.75);
@@ -2121,7 +2219,7 @@
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const orbitTarget = new THREE.Vector3(0, 1.6, 0);
+    const orbitTarget = new THREE.Vector3(0, HUMAN_EYE_HEIGHT_M, 0);
     let orbitState = null;
 
     function onPointerDown(event) {

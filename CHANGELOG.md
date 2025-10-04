@@ -1,6 +1,12 @@
 
 # Changelog
 
+## 2025-10-04T15:29:44Z
+- feat: complete step [p1] Mirror 2D cable path edits into the FPV scene by ingesting storage updates and rebuilding Three.js tubes from the shared layout.
+- fix: complete step [p1] Remove plan-view clamps on cable handles and bend inserts while persisting absolute spline coordinates for out-of-bounds adjustments.
+- feat: complete step [p2] Add wall-mounted height controls to the survey UI and honor socket mount offsets when resolving cable anchors.
+- feat: complete step [p2] Retune default cable slack so sampled control handles sag toward the floor consistently across 2D and 3D renders.
+
 ## 2025-10-06T05:30:00Z
 - fix: complete step [p1] Wire orientation tab clicks to update the SVG data attribute so wall and ceiling projections replace the floor plan without losing selection context.
 - feat: complete step [p2] Gate the survey scale overlay behind a config flag and documentable tests so rulers render without blocking interactions.

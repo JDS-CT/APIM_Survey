@@ -353,6 +353,20 @@
       microscope: { label: 'Microscope', wmm: 2200, lmm: 1800, color: 0x8c5dd8, height: 2.0 },
       table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
       pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 },
+      chiller: { label: 'Chiller', wmm: 1200, lmm: 800, color: 0x1d4ed8, height: 1.4 },
+      n2_bottle: { label: 'N2 Bottle', wmm: 450, lmm: 450, color: 0x14532d, height: 1.45, kind: 'cylinder' },
+      bottled_air_line: { label: 'Bottled Air Line', wmm: 600, lmm: 600, color: 0xf97316, height: 1.1 },
+      table_resizable: { label: 'Resizable Table', wmm: 2000, lmm: 1000, color: 0x2563eb, height: 0.9 },
+      thermostat_ceiling: {
+        label: 'Ceiling Thermostat',
+        wmm: 240,
+        lmm: 240,
+        color: 0xfdba74,
+        height: 0.35,
+        heightMm: 120,
+        dropMm: 350,
+        kind: 'ceilingThermostat'
+      },
       [ASSET_FLOOR_ITEM_TYPE]: { label: 'GLTF Asset', wmm: 2000, lmm: 2000, color: 0x8b5cf6, height: 0.2 }
     };
 
@@ -420,6 +434,50 @@
             allowedCableTypes: ALL_CATALOG_TYPES,
             surface: 'wall',
             offsetDirection: -1
+          }
+        ]
+      },
+      wall_air_barb: {
+        label: 'Wall Air Barb',
+        assetKey: 'wall_air_barb',
+        defaultDepthMm: 260,
+        color: 0x38bdf8,
+        mountHeightMm: 1500,
+        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM, depth: 90, width: 260, height: 220 },
+        fallbackSockets: [
+          {
+            id: 'wall_air_barb',
+            label: 'Air Barb',
+            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+            allowedCableTypes: ['air'],
+            surface: 'wall',
+            offsetDirection: 1
+          }
+        ]
+      },
+      thermostat_wall: {
+        label: 'Wall Thermostat',
+        assetKey: 'thermostat_wall',
+        defaultDepthMm: 120,
+        color: 0xf59e0b,
+        mountHeightMm: 1500,
+        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM, depth: 80, width: 180, height: 220 },
+        fallbackSockets: [
+          {
+            id: 'thermostat_power',
+            label: 'Thermostat Power',
+            anchor: { u: 0.5, v: 0.5, w: 0.6 },
+            allowedCableTypes: ['power'],
+            surface: 'wall',
+            offsetDirection: 1
+          },
+          {
+            id: 'thermostat_data',
+            label: 'Thermostat Data',
+            anchor: { u: 0.5, v: 0.5, w: 0.3 },
+            allowedCableTypes: ['ethernet'],
+            surface: 'wall',
+            offsetDirection: 1
           }
         ]
       }
@@ -1916,16 +1974,64 @@
           return;
         }
         const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
+        const world = mmPointToWorld(
+          toNumber(item.x, layout.room.Wmm / 2),
+          toNumber(item.y, layout.room.Lmm / 2)
+        );
+
+        if (meta.kind === 'ceilingThermostat') {
+          const dropMm = clamp(
+            toNumber(item.drop_mm ?? item.h, meta.dropMm ?? 350),
+            120,
+            ROOM_HEIGHT_MM - 200
+          );
+          const sensorHeightMm = Math.max(meta.heightMm || meta.wmm || 200, 120);
+          const rodLengthMm = Math.max(dropMm - sensorHeightMm / 2, 120);
+          const group = new THREE.Group();
+          const rodGeometry = new THREE.CylinderGeometry(mm2m(20), mm2m(20), mm2m(rodLengthMm), 12);
+          const rodMaterial = new THREE.MeshStandardMaterial({
+            color: 0x94a3b8,
+            roughness: 0.3,
+            metalness: 0.6
+          });
+          const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+          rod.position.y = -mm2m(rodLengthMm / 2);
+          group.add(rod);
+
+          const radiusMm = Math.max(meta.wmm ?? 240, 180) / 2;
+          const puckHeightMm = Math.max(meta.heightMm ?? 120, 80);
+          const puckGeometry = new THREE.CylinderGeometry(mm2m(radiusMm), mm2m(radiusMm * 0.9), mm2m(puckHeightMm), 24);
+          const puckMaterial = new THREE.MeshStandardMaterial({
+            color: meta.color,
+            roughness: 0.4,
+            metalness: 0.2
+          });
+          const puck = new THREE.Mesh(puckGeometry, puckMaterial);
+          puck.position.y = -mm2m(rodLengthMm);
+          group.add(puck);
+
+          group.position.set(world.x, mm2m(ROOM_HEIGHT_MM), world.z);
+          group.userData.floorItemId = item.id;
+          itemGroup.add(group);
+          return;
+        }
+
         const w = mm2m(toNumber(item.w, meta.wmm));
         const l = mm2m(toNumber(item.l, meta.lmm));
         const h = meta.height !== undefined ? meta.height : 1.0;
-        const geometry = new THREE.BoxGeometry(w, h, l);
+        let geometry;
+        if (meta.kind === 'cylinder') {
+          const radius = Math.max(w, l) / 2;
+          geometry = new THREE.CylinderGeometry(radius, radius * 0.95, h, 24);
+        } else {
+          geometry = new THREE.BoxGeometry(w, h, l);
+        }
         const material = new THREE.MeshStandardMaterial({ color: meta.color, roughness: 0.45, metalness: 0.1 });
         const mesh = new THREE.Mesh(geometry, material);
-        const world = mmPointToWorld(toNumber(item.x, layout.room.Wmm / 2), toNumber(item.y, layout.room.Lmm / 2));
         mesh.position.set(world.x, h / 2, world.z);
         const rot = THREE.MathUtils.degToRad(toNumber(item.rotation, 0));
         if (rot) mesh.rotation.y = -rot;
+        mesh.userData.floorItemId = item.id;
         itemGroup.add(mesh);
       });
     }

@@ -1,6 +1,11 @@
 
 # Changelog
 
+## 2025-10-06T12:45:00Z
+- feat: complete step [p2] Add wall and ceiling thermostat assets with catalog metadata, ceiling plan overlays, and FPV hanging sensor meshes plus regression coverage.
+- feat: complete step [p2] Define catalog entries for chiller, N2 bottle, wall air barb, bottled air line, and resizable tables with shared defaults across 2D and FPV views.
+- test: extend markup and catalog fixtures to assert new asset options, ceiling layers, and default catalog keys.
+
 ## 2025-10-04T19:26:35Z
 - feat: complete step [p2] Extend regression tests for saved layout imports and orientation tab switching using a captured fixture and Node-driven assertions.
 - feat: complete step [p2] Improve FPV scale cues and idle behavior with a shared movement controller and recalibrated eye height.

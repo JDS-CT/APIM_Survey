@@ -1,6 +1,10 @@
 
 # Changelog
 
+## 2025-10-04T17:06:49Z
+- feat: complete step [p1] Align wall elevation drag interactions with the shared floor snap pipeline so wall tab edits honor snap increments and HUD feedback.
+- feat: complete step [p1] Rework default cable sag so untouched splines drop to the floor quickly and track the 2D path via updated control point defaults and markup tests.
+
 ## 2025-10-04T15:29:44Z
 - feat: complete step [p1] Mirror 2D cable path edits into the FPV scene by ingesting storage updates and rebuilding Three.js tubes from the shared layout.
 - fix: complete step [p1] Remove plan-view clamps on cable handles and bend inserts while persisting absolute spline coordinates for out-of-bounds adjustments.

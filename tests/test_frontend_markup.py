@@ -154,6 +154,16 @@ def test_room_survey_provides_wall_elevation_and_scale_overlay() -> None:
     assert "const SCALE_OVERLAY_CONFIG" in html
 
 
+def test_wall_elevation_uses_shared_snap_drag_pipeline() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function handleWallElevationDragStart" in html
+    assert "drag.kind === 'wall-elevation-item'" in html
+    assert "snapValue(roomPt.x - drag.offsetX)" in html
+
+
 def test_room_survey_updates_svg_orientation_attribute() -> None:
     html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
         encoding="utf-8"
@@ -207,6 +217,16 @@ def test_room_survey_exports_unclamped_cable_points() -> None:
     assert "const rawU = Number(pt.x) / state.Wmm;" in html
     assert "const rawV = Number(pt.y) / state.Lmm;" in html
     assert "const rawW = Number(pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM;" in html
+
+
+def test_cable_defaults_drop_to_ground_run() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const GROUND_Z_MM = 0;" in html
+    assert "const CABLE_DROP_FRACTION" in html
+    assert "const CABLE_DROP_MAX_MM" in html
 
 
 def test_fps_viewer_syncs_layout_storage_updates() -> None:

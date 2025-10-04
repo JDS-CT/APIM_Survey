@@ -1,0 +1,32 @@
+{
+  "units": "mm",
+  "room": { "W": 6200, "L": 7800 },
+  "snap_mm": 100,
+  "imperial_display": false,
+  "mode": "custom",
+  "orientation": "wall:base:2",
+  "floor_items": [
+    { "id": "floor_1", "type": "floorBox", "x": 1400, "y": 1800, "w": 600, "l": 600, "rotation": 0 }
+  ],
+  "wall_items": [
+    { "id": "socket_5", "type": "socket", "wall": "base:2", "s": 900, "h": 1200 }
+  ],
+  "custom_walls": [],
+  "doors": [
+    { "id": "door_1", "wall": "base:3", "offset": 900, "width": 1200, "thickness": 80, "label": "Lab Door" }
+  ],
+  "cables": [
+    {
+      "id": "cable_1",
+      "type": "power",
+      "points": [
+        { "x": 1400, "y": 1800, "z": 0 },
+        { "x": 1600, "y": 1800, "z": 0 },
+        { "x": 2000, "y": 2100, "z": 0 }
+      ],
+      "source": { "kind": "floor", "assetId": "floor_1", "socketId": "microscope_power" },
+      "target": { "kind": "wall", "assetId": "socket_5", "socketId": "wall_outlet_duplex" }
+    }
+  ],
+  "selected_surface": { "type": "wallItem", "id": "socket_5" }
+}

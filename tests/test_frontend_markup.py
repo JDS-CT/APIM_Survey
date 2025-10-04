@@ -56,7 +56,7 @@ def test_fps_viewer_supports_hand_mode_and_vertical_translation() -> None:
     assert "let handModeVerticalStep" in html
     assert "transformControls.showY = true" in html
     assert "scheduleWalkOverlayAutoHide" in html
-    assert "velocity.y += direction.y * speed * delta" in html
+    assert "pointerControls.getObject().position.y += velocity.y * delta" in html
     assert "selectedObject.position.y -= verticalStep" in html
 
 
@@ -79,7 +79,7 @@ def test_fps_viewer_exposes_translation_snap_controls() -> None:
     assert 'id="translationSnapValue"' in html
     assert "function applyTranslationSnap" in html
     assert "transformControls.setTranslationSnap(translationSnap);" in html
-    assert "function hasActiveMovement()" in html
+    assert "movementController.reset" in html
 
 
 def test_fps_viewer_persists_gltf_asset_state() -> None:
@@ -139,6 +139,17 @@ def test_room_survey_exposes_orientation_tabs() -> None:
     assert 'data-orientation="ceiling"' in html
     assert 'data-orientation="wall:base:1"' in html
     assert 'id="viewSelectedWall"' in html
+
+
+def test_room_survey_serializes_orientation_state() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "orientation_helpers.js" in html
+    assert "snapshotOrientation" in html
+    assert "normalizeOrientation" in html
+    assert "setOrientation(key" in html
 
 
 def test_room_survey_provides_wall_elevation_and_scale_overlay() -> None:
@@ -207,7 +218,18 @@ def test_fps_viewer_uses_human_scale_height_and_markers() -> None:
     assert "function buildScaleMarkers" in html
     assert "function createLabelSprite" in html
     assert "const HUMAN_EYE_HEIGHT_M" in html
+    assert "1.6" in html  # human-scale eye height tightened to ~1.6 m
     assert "camera.position.set(0, HUMAN_EYE_HEIGHT_M, 5);" in html
+
+
+def test_fps_viewer_imports_shared_movement_controller() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fpv_movement_controller.js" in html
+    assert "createMovementController" in html
+    assert "movementController.step" in html
 
 
 def test_room_survey_exposes_wall_mount_height_controls() -> None:

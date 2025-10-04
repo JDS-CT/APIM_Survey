@@ -1,16 +1,16 @@
 TEST -- using AGENTS.md file
 # TODO
-🔲 [p2] Extend regression tests to cover importing a saved layout and switching between orientation tabs without losing state.
-  - [ ] Capture a layout export fixture containing floor and wall placements plus cables.
-  - [ ] Write a survey store test that loads the fixture, flips tabs, and asserts selection/cable context persists.
-🔲 [p2] Improve first-person perspective scale cues and idle behavior.
-  - [ ] Add a failing FPV test ensuring the default avatar height is ~1.6 m and that 1 m markers render in the scene graph.
-  - [ ] Implement camera/controller height adjustments and add visual measurement helpers in 3D.
-  - [ ] Add an automated check that first-person mode stops moving when no input is pressed.
-  - [ ] Author a unit test around the FPV movement controller that steps the simulation without inputs and asserts zero velocity.
-  - [ ] Mock pointer lock/input sources so the test runs in headless environments.
-🔲 [p2] Backfill regression coverage for the new FPV module loader path or document why automated coverage is deferred.
-  - [ ] Identify loader behaviors lacking tests and create targeted coverage, or log blockers in PROBLEMS.md if testing is infeasible.
+✅ [p2] Extend regression tests to cover importing a saved layout and switching between orientation tabs without losing state.
+  - [x] Capture a layout export fixture containing floor and wall placements plus cables.
+  - [x] Write a survey store test that loads the fixture, flips tabs, and asserts selection/cable context persists.
+✅ [p2] Improve first-person perspective scale cues and idle behavior.
+  - [x] Add a failing FPV test ensuring the default avatar height is ~1.6 m and that 1 m markers render in the scene graph.
+  - [x] Implement camera/controller height adjustments and add visual measurement helpers in 3D.
+  - [x] Add an automated check that first-person mode stops moving when no input is pressed.
+  - [x] Author a unit test around the FPV movement controller that steps the simulation without inputs and asserts zero velocity.
+  - [x] Mock pointer lock/input sources so the test runs in headless environments.
+✅ [p2] Backfill regression coverage for the new FPV module loader path or document why automated coverage is deferred.
+  - [x] Identify loader behaviors lacking tests and create targeted coverage, or log blockers in PROBLEMS.md if testing is infeasible.
 ✅ [p2] Synchronize the orientation tabs with 2D layout state so switching tabs updates the canvas projection without losing context.
   - [x] Wire tab clicks to the existing orientation setter and ensure canvases re-render with the selected wall/floor/ceiling view.
   - [x] Preserve active selections and cable editing handles when orientation changes.

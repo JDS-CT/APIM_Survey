@@ -1,6 +1,11 @@
 
 # Changelog
 
+## 2025-10-04T19:26:35Z
+- feat: complete step [p2] Extend regression tests for saved layout imports and orientation tab switching using a captured fixture and Node-driven assertions.
+- feat: complete step [p2] Improve FPV scale cues and idle behavior with a shared movement controller and recalibrated eye height.
+- test: backfill FPV module loader coverage with headless movement simulations and orientation helpers.
+
 ## 2025-10-04T17:21:24Z
 - feat: complete step [p1] Stand up an editable inventory table with rename inputs, derived fit checks, and documentation guidance for future parameters.
 
@@ -169,3 +174,9 @@
 - feat: complete step [p2] Gate the survey scale overlay behind a config flag and documentable tests so rulers render without blocking interactions.
 - docs: Refine the design-principles Q&A to emphasize custom notes, follow-up integration, and sensor context.
 - test: Extend markup assertions to cover the SVG orientation attribute setter and the FPV human eye-height constant.
+# Changelog
+
+## 2025-10-04T19:26:35Z
+- feat: complete step [p2] Extend regression tests for saved layout imports and orientation tab switching using a captured fixture and Node-driven assertions.
+- feat: complete step [p2] Improve FPV scale cues and idle behavior with a shared movement controller and recalibrated eye height.
+- test: backfill FPV module loader coverage with headless movement simulations and orientation helpers.

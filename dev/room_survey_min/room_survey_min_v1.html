@@ -204,6 +204,57 @@
       font-size: 13px;
       color: var(--room-ui-muted);
     }
+    .inventory-panel h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .inventory-table-wrapper {
+      display: grid;
+      gap: 10px;
+    }
+    .inventory-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .inventory-table th,
+    .inventory-table td {
+      border-bottom: 1px solid var(--room-ui-border-soft);
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .inventory-table thead th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--room-ui-muted-strong);
+      background: rgba(15, 23, 42, 0.08);
+    }
+    .inventory-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .inventory-rename {
+      width: 100%;
+      border: 1px solid var(--room-ui-border);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.9);
+      color: inherit;
+    }
+    .inventory-rename:focus {
+      outline: 2px solid rgba(96, 165, 250, 0.65);
+      outline-offset: 2px;
+    }
+    .inventory-empty {
+      font-size: 13px;
+      color: var(--room-ui-muted);
+      display: none;
+    }
+    .inventory-derived {
+      font-variant-numeric: tabular-nums;
+    }
     .wall-choice {
       min-width: 220px;
     }
@@ -376,6 +427,28 @@
         </div>
         <div class="note">Switch to the custom layout to draw new walls, add doors, and place sockets on specific runs.</div>
       </div>
+      <div class="panel inventory-panel" id="inventoryPanel">
+        <h3>Inventory &amp; Fit Checks</h3>
+        <div class="note">Rename layout elements and confirm clearance at a glance.</div>
+        <div class="inventory-table-wrapper">
+          <table class="inventory-table" id="inventoryTable">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Height</th>
+                <th scope="col">Width</th>
+                <th scope="col">Length</th>
+                <th scope="col">System Width</th>
+                <th scope="col">Door Width</th>
+                <th scope="col">Microscope Fits Through Entrance?</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody"></tbody>
+          </table>
+          <div class="inventory-empty" id="inventoryEmpty">Add doors and equipment to populate this summary.</div>
+        </div>
+      </div>
       <div class="panel legend">
         <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
         <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
@@ -449,6 +522,9 @@ const addWallBtn = document.getElementById('addWall');
 const addDoorBtn = document.getElementById('addDoor');
 const exportBtn = document.getElementById('export');
 const hud = document.getElementById('hud');
+const inventoryTableEl = document.getElementById('inventoryTable');
+const inventoryTableBody = document.getElementById('inventoryTableBody');
+const inventoryEmptyState = document.getElementById('inventoryEmpty');
 const orientationTabsEl = document.getElementById('orientationTabs');
 const viewSelectedWallBtn = document.getElementById('viewSelectedWall');
 const orientationButtons = orientationTabsEl
@@ -625,6 +701,130 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(num) ? num : fallback;
 }
 
+function trimmedLabel(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function defaultDoorLabel(index) {
+  return `Door ${index + 1}`;
+}
+
+function defaultFloorItemBaseLabel(item) {
+  const type = item && item.type ? item.type : 'floorItem';
+  const def = FLOOR_ITEM_DEFS[type] || FLOOR_ITEM_DEFS.floorBox;
+  const label = def && def.label ? trimmedLabel(def.label) : '';
+  return label || 'Item';
+}
+
+function ensureInventoryLabels() {
+  const floorTypeCounts = {};
+  state.floorItems.forEach(item => {
+    const type = item && item.type ? item.type : 'floorItem';
+    floorTypeCounts[type] = (floorTypeCounts[type] || 0) + 1;
+    const provided = trimmedLabel(item.label || item.name || item.title);
+    if (provided) {
+      item.label = provided;
+    } else {
+      const base = defaultFloorItemBaseLabel(item);
+      item.label = `${base} ${floorTypeCounts[type]}`;
+    }
+  });
+  state.doors.forEach((door, index) => {
+    const provided = trimmedLabel(door.label || door.name || door.title);
+    door.label = provided || defaultDoorLabel(index);
+  });
+}
+
+function computeLargestDoorWidth() {
+  if (!Array.isArray(state.doors) || state.doors.length === 0) return 0;
+  return state.doors.reduce((max, door) => {
+    const width = toNumber(door && door.width, 0);
+    return width > max ? width : max;
+  }, 0);
+}
+
+function computeMicroscopeFitForWidth(systemWidthMm, doorWidthMm) {
+  const systemWidth = toNumber(systemWidthMm, 0);
+  const doorWidth = toNumber(doorWidthMm, 0);
+  if (systemWidth <= 0 || doorWidth <= 0) return null;
+  return doorWidth >= systemWidth;
+}
+
+function formatDimensionForTable(mm) {
+  const value = toNumber(mm, 0);
+  if (value <= 0) return '—';
+  return fmtLen(value);
+}
+
+function gatherInventoryRows() {
+  const rows = [];
+  const largestDoorWidth = computeLargestDoorWidth();
+  if (Array.isArray(state.doors)) {
+    state.doors.forEach(door => {
+      rows.push({
+        id: door.id,
+        kind: 'door',
+        label: door.label,
+        typeLabel: 'Door',
+        heightMm: DOOR_ELEVATION_HEIGHT_MM,
+        widthMm: toNumber(door.width, DOOR_DEFAULT_WIDTH),
+        lengthMm: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS),
+        systemWidthMm: null,
+        doorWidthMm: toNumber(door.width, DOOR_DEFAULT_WIDTH),
+        fit: null
+      });
+    });
+  }
+  if (Array.isArray(state.floorItems)) {
+    state.floorItems.forEach(item => {
+      const base = defaultFloorItemBaseLabel(item);
+      const typeDef = FLOOR_ITEM_DEFS[item.type] || FLOOR_ITEM_DEFS.floorBox;
+      const typeLabel = typeDef && typeDef.label ? typeDef.label : base;
+      const widthMmRaw = item.w ?? typeDef.w;
+      const lengthMmRaw = item.l ?? typeDef.l;
+      const heightMmRaw = item.height_mm ?? item.heightMm ?? item.h ?? null;
+      const widthMm = toNumber(widthMmRaw, 0);
+      const lengthMm = toNumber(lengthMmRaw, 0);
+      const heightMm = toNumber(heightMmRaw, 0);
+      const systemWidthMm = widthMm > 0 ? widthMm : null;
+      const fit = item.type === 'microscope'
+        ? computeMicroscopeFitForWidth(systemWidthMm, largestDoorWidth)
+        : null;
+      rows.push({
+        id: item.id,
+        kind: 'floor',
+        label: item.label,
+        typeLabel,
+        heightMm: heightMm > 0 ? heightMm : null,
+        widthMm: widthMm > 0 ? widthMm : null,
+        lengthMm: lengthMm > 0 ? lengthMm : null,
+        systemWidthMm,
+        doorWidthMm: largestDoorWidth,
+        fit
+      });
+    });
+  }
+  return rows;
+}
+
+function updateInventoryLabel(kind, id, value) {
+  const next = trimmedLabel(value);
+  if (kind === 'door') {
+    const door = state.doors.find(d => d.id === id);
+    if (door) {
+      door.label = next;
+    }
+  } else if (kind === 'floor') {
+    const item = state.floorItems.find(it => it.id === id);
+    if (item) {
+      item.label = next;
+    }
+  }
+  ensureInventoryLabels();
+  renderInventoryTable();
+  maybePersistLayout();
+}
+
 function isEditingFormControl(el) {
   if (!el) return false;
   if (el.isContentEditable) return true;
@@ -656,6 +856,7 @@ function applyDefaultPreset() {
   state.cables = (preset.cables || [])
     .map(entry => normalizeCableFromLayout(entry))
     .filter(Boolean);
+  ensureInventoryLabels();
   state.selectedSurface = { type: 'floor' };
   Winput.value = state.Wmm;
   Linput.value = state.Lmm;
@@ -669,6 +870,7 @@ function normalizeFloorItemFromLayout(item) {
   const type = item.type || 'floorBox';
   const def = FLOOR_ITEM_DEFS[type] || FLOOR_ITEM_DEFS.floorBox;
   const id = item.id !== undefined ? String(item.id) : genId('floor');
+  const label = trimmedLabel(item.label || item.name || item.title);
   return {
     id,
     type,
@@ -678,7 +880,8 @@ function normalizeFloorItemFromLayout(item) {
     l: toNumber(item.l ?? item.size ?? def.l, def.l),
     rotation: toNumber(item.rotation, 0),
     assetRef: typeof item.assetRef === 'string' ? item.assetRef : undefined,
-    elevation_mm: item.elevation_mm !== undefined ? toNumber(item.elevation_mm, 0) : undefined
+    elevation_mm: item.elevation_mm !== undefined ? toNumber(item.elevation_mm, 0) : undefined,
+    label: label || undefined
   };
 }
 
@@ -741,12 +944,14 @@ function normalizeDoorFromLayout(door) {
   let wallRef = door.wall;
   if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
   if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  const label = trimmedLabel(door.label || door.name || door.title);
   return {
     id,
     wall: wallRef || 'base:1',
     offset: toNumber(door.offset, 0),
     width: toNumber(door.width, DOOR_DEFAULT_WIDTH),
-    thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS)
+    thickness: toNumber(door.thickness, DOOR_DEFAULT_THICKNESS),
+    label: label || undefined
   };
 }
 
@@ -791,6 +996,10 @@ function snapshotLayout() {
       if (item.elevation_mm !== undefined) {
         snapshot.elevation_mm = Math.round(item.elevation_mm);
       }
+      if (item.label) {
+        snapshot.label = item.label;
+        snapshot.name = item.label;
+      }
       return snapshot;
     }),
     wall_items: state.wallItems.map(item => {
@@ -820,7 +1029,8 @@ function snapshotLayout() {
       wall: door.wall,
       offset: Math.round(door.offset || 0),
       width: Math.round(door.width || DOOR_DEFAULT_WIDTH),
-      thickness: Math.round(door.thickness || DOOR_DEFAULT_THICKNESS)
+      thickness: Math.round(door.thickness || DOOR_DEFAULT_THICKNESS),
+      ...(door.label ? { label: door.label, name: door.label } : {})
     })),
     selected_surface: snapshotSelectedSurface(state.selectedSurface)
   };
@@ -1012,6 +1222,7 @@ function applyLayout(raw, { skipPersist = false, message } = {}) {
       ? layout.doors.map(normalizeDoorFromLayout).filter(Boolean)
       : [];
     state.cables = normalizeCableArray(layout);
+    ensureInventoryLabels();
 
     syncIdCounterFromLayout();
     recomputeScale();
@@ -1653,6 +1864,7 @@ function render() {
   }
   updateOrientationActiveState();
   renderScaleOverlay();
+  renderInventoryTable();
   updateWallItemControls();
   hud.textContent = hudTransient || defaultHudMessage();
   hudTransient = null;
@@ -1842,6 +2054,85 @@ function renderWallOrientation() {
     hint.setAttribute('fill', '#475569');
     hint.textContent = 'No wall items on this elevation yet.';
     wallElevationLayer.appendChild(hint);
+  }
+}
+
+function renderInventoryTable() {
+  if (!inventoryTableBody) return;
+  ensureInventoryLabels();
+  const rows = gatherInventoryRows();
+  inventoryTableBody.innerHTML = '';
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+
+    const nameCell = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'inventory-rename';
+    input.value = row.label || '';
+    input.setAttribute('aria-label', `Rename ${row.typeLabel}`);
+    input.dataset.inventoryId = row.id;
+    input.dataset.inventoryKind = row.kind;
+    input.addEventListener('change', evt => {
+      updateInventoryLabel(row.kind, row.id, evt.target.value);
+    });
+    input.addEventListener('keydown', evt => {
+      if (evt.key === 'Enter') {
+        evt.preventDefault();
+        input.blur();
+      }
+    });
+    nameCell.appendChild(input);
+    tr.appendChild(nameCell);
+
+    const typeCell = document.createElement('td');
+    typeCell.textContent = row.typeLabel;
+    tr.appendChild(typeCell);
+
+    const heightCell = document.createElement('td');
+    heightCell.className = 'inventory-derived';
+    heightCell.textContent = formatDimensionForTable(row.heightMm);
+    tr.appendChild(heightCell);
+
+    const widthCell = document.createElement('td');
+    widthCell.className = 'inventory-derived';
+    widthCell.textContent = formatDimensionForTable(row.widthMm);
+    tr.appendChild(widthCell);
+
+    const lengthCell = document.createElement('td');
+    lengthCell.className = 'inventory-derived';
+    lengthCell.textContent = formatDimensionForTable(row.lengthMm);
+    tr.appendChild(lengthCell);
+
+    const systemWidthCell = document.createElement('td');
+    systemWidthCell.className = 'inventory-derived';
+    systemWidthCell.textContent = formatDimensionForTable(row.systemWidthMm);
+    tr.appendChild(systemWidthCell);
+
+    const doorWidthCell = document.createElement('td');
+    doorWidthCell.className = 'inventory-derived';
+    doorWidthCell.textContent = formatDimensionForTable(row.doorWidthMm);
+    tr.appendChild(doorWidthCell);
+
+    const fitCell = document.createElement('td');
+    fitCell.className = 'inventory-derived';
+    let fitText = '—';
+    if (row.fit === true) {
+      fitText = 'TRUE';
+    } else if (row.fit === false) {
+      fitText = 'FALSE';
+    }
+    fitCell.textContent = fitText;
+    tr.appendChild(fitCell);
+
+    inventoryTableBody.appendChild(tr);
+  });
+  const hasRows = rows.length > 0;
+  if (inventoryEmptyState) {
+    inventoryEmptyState.style.display = hasRows ? 'none' : 'block';
+  }
+  if (inventoryTableEl) {
+    inventoryTableEl.style.opacity = hasRows ? '1' : '0.4';
   }
 }
 
@@ -2523,6 +2814,7 @@ function deleteSelectedItem() {
       const [removed] = state.floorItems.splice(idx, 1);
       const def = removed ? FLOOR_ITEM_DEFS[removed.type] || FLOOR_ITEM_DEFS.floorBox : null;
       setSelectedSurface({ type: 'floor' }, { skipRender: true });
+      ensureInventoryLabels();
       return `${def ? def.label : 'Floor item'} removed`;
     }
   } else if (surface.type === 'wallItem') {
@@ -2539,6 +2831,7 @@ function deleteSelectedItem() {
       const [removed] = state.doors.splice(idx, 1);
       const geom = removed ? getWallGeometry(removed.wall) : null;
       setSelectedSurface(removed ? { type: 'wall', ref: removed.wall } : { type: 'floor' }, { skipRender: true });
+      ensureInventoryLabels();
       return `Door removed${geom ? ` from ${geom.label}` : ''}`;
     }
   } else if (surface.type === 'wall' && typeof surface.ref === 'string' && surface.ref.startsWith('custom:')) {
@@ -2549,6 +2842,7 @@ function deleteSelectedItem() {
       state.doors = state.doors.filter(d => d.wall !== surface.ref);
       state.wallItems = state.wallItems.filter(it => it.wall !== surface.ref);
       setSelectedSurface({ type: 'floor' }, { skipRender: true });
+      ensureInventoryLabels();
       return `${removed?.name || 'Custom wall'} removed`;
     }
   }
@@ -2664,6 +2958,7 @@ basicAddBtn.addEventListener('click', () => {
     rotation: 0
   };
   state.floorItems.push(item);
+  ensureInventoryLabels();
   setSelectedSurface({ type: 'floorItem', id: item.id });
   showHud(`${def.label} added`);
   render();
@@ -2708,6 +3003,7 @@ addBtn.addEventListener('click', () => {
       rotation: 0
     };
     state.floorItems.push(item);
+    ensureInventoryLabels();
     setSelectedSurface({ type: 'floorItem', id: item.id });
     showHud(`${def.label} added`);
     render();
@@ -2747,6 +3043,7 @@ addDoorBtn.addEventListener('click', () => {
     thickness: DOOR_DEFAULT_THICKNESS
   };
   state.doors.push(door);
+  ensureInventoryLabels();
   setSelectedSurface({ type: 'door', id: door.id });
   showHud(`Door added to ${geom.label}`);
   render();

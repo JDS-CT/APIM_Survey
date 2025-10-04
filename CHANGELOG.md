@@ -1,5 +1,9 @@
 # Changelog
 
+## 2025-10-05T12:30:00Z
+- feat: complete step [p2] Add tabbed orientation controls above the 2D survey canvas for floor, wall, ceiling, and custom wall views with a View Selected shortcut tied to the existing wall selector.
+- test: extend frontend markup coverage to assert the new orientation tab controls render with floor, ceiling, and wall targets.
+
 ## 2025-10-05T08:15:00Z
 - fix: complete step [p1] Restore the cable type dropdown by restructuring the shared default catalog so fallback metadata loads before the fetch completes.
 - feat: complete step [p1] Seed the default survey and FPV layouts with a sample microscope power cable for instant visualization and persistence regression coverage.

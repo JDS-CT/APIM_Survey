@@ -129,6 +129,18 @@ def test_room_survey_exposes_cable_bend_points() -> None:
     assert "data-bend-index" in html
 
 
+def test_room_survey_exposes_orientation_tabs() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="orientationTabs"' in html
+    assert 'data-orientation="floor"' in html
+    assert 'data-orientation="ceiling"' in html
+    assert 'data-orientation="wall:base:1"' in html
+    assert 'id="viewSelectedWall"' in html
+
+
 def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
     html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
         encoding="utf-8"

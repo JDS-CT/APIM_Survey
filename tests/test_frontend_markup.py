@@ -204,7 +204,9 @@ def test_room_survey_inventory_table_with_fit_checks() -> None:
         encoding="utf-8"
     )
 
-    assert 'id="inventoryPanel"' in html
+    assert 'id="canvasInfoTabs"' in html
+    assert 'id="canvasPanel-dimensions"' in html
+    assert 'data-panel="legend"' in html
     assert 'id="inventoryTable"' in html
     assert "Microscope Fits Through Entrance?" in html
     assert "function renderInventoryTable" in html

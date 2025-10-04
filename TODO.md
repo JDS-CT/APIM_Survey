@@ -1,5 +1,10 @@
 TEST -- using AGENTS.md file
 # TODO
+✅ [p1] Reflow the 2D survey controls and theme to maximize canvas space and improve legibility.
+  - [x] Expand the controls column width and tighten button/input styling so content no longer feels cramped.
+  - [x] Move the inventory summary and legend into secondary tabs above the canvas with concise labels.
+  - [x] Restyle text inputs/selects for the dark theme so fields adopt dark surfaces with readable text.
+  - [x] Update layout defaults/tests/documentation references if the new tab wiring impacts existing behaviors.
 ✅ [p1] Restore wall elevation drag snapping to match the floor snap pipeline and retire the legacy mount height panel.
   - [x] Audit wall tab drag handlers to find where snap increments diverge from floor logic and note reuse opportunities.
   - [x] Refactor wall drag interactions to reuse the shared snap utility so vertical moves quantize to snap spacing and emit HUD feedback.

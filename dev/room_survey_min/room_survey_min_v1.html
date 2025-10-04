@@ -74,14 +74,20 @@
     }
     main {
       display: grid;
-      grid-template-columns: minmax(280px, 360px) 1fr;
-      gap: 20px;
-      padding: 24px;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 24px;
+      padding: clamp(20px, 3vw, 32px);
       align-items: start;
     }
     aside {
       display: grid;
-      gap: 20px;
+      gap: 16px;
+      align-content: start;
+    }
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
     .panel {
       background: var(--room-ui-surface);
@@ -101,7 +107,15 @@
       display: grid;
       gap: 12px;
     }
-    .orientation-tabs {
+    .orientation-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .orientation-tabs,
+    .canvas-info-tabs {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -138,8 +152,8 @@
     }
     .row {
       display: flex;
-      gap: 14px;
-      align-items: center;
+      gap: 12px;
+      align-items: flex-end;
       flex-wrap: wrap;
     }
     label {
@@ -153,35 +167,55 @@
     label input,
     label select {
       font: inherit;
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid var(--room-ui-border);
-      background: rgba(255, 255, 255, 0.92);
-      min-width: 7em;
-      color: inherit;
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--room-ui-input-border, var(--room-ui-border));
+      background: var(--room-ui-input-bg, rgba(30, 41, 59, 0.82));
+      min-width: 7.5em;
+      color: var(--room-ui-input-text, var(--room-ui-text));
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22) inset;
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    label input:focus,
+    label select:focus {
+      outline: none;
+      border-color: var(--room-ui-input-focus-border, rgba(96, 165, 250, 0.7));
+      box-shadow: 0 0 0 2px var(--room-ui-input-focus-shadow, rgba(37, 99, 235, 0.25));
+      background: var(--room-ui-input-bg-active, rgba(30, 41, 59, 0.92));
+    }
+    input::placeholder {
+      color: var(--room-ui-input-placeholder, rgba(148, 163, 184, 0.7));
     }
     input[type="number"] {
-      width: 7em;
+      width: 7.5em;
     }
     .btn {
       appearance: none;
       font: inherit;
-      padding: 8px 12px;
-      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 10px;
       border: 1px solid var(--room-ui-button-border);
-      background: linear-gradient(180deg, var(--room-ui-button-bg-top), var(--room-ui-button-bg-bottom));
+      background: linear-gradient(180deg, rgba(59, 130, 246, 0.12), rgba(37, 99, 235, 0.14));
+      color: var(--room-ui-text);
       cursor: pointer;
-      transition: transform 120ms ease, box-shadow 120ms ease;
+      transition: background 120ms ease, box-shadow 120ms ease;
     }
     .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px var(--room-ui-shadow);
+      background: linear-gradient(180deg, rgba(96, 165, 250, 0.18), rgba(59, 130, 246, 0.22));
+      box-shadow: 0 8px 18px var(--room-ui-shadow);
     }
     .legend {
       display: grid;
       gap: 6px;
       font-size: 13px;
       color: var(--room-ui-muted-strong);
+    }
+    .legend-list {
+      display: grid;
+      gap: 6px;
     }
     .dot {
       width: 12px;
@@ -211,6 +245,8 @@
     .inventory-table-wrapper {
       display: grid;
       gap: 10px;
+      max-height: 260px;
+      overflow: auto;
     }
     .inventory-table {
       width: 100%;
@@ -236,16 +272,19 @@
     }
     .inventory-rename {
       width: 100%;
-      border: 1px solid var(--room-ui-border);
-      border-radius: 6px;
-      padding: 4px 6px;
+      border: 1px solid var(--room-ui-input-border, var(--room-ui-border));
+      border-radius: 8px;
+      padding: 6px 8px;
       font: inherit;
-      background: rgba(255, 255, 255, 0.9);
-      color: inherit;
+      background: var(--room-ui-input-bg, rgba(30, 41, 59, 0.82));
+      color: var(--room-ui-input-text, var(--room-ui-text));
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     }
     .inventory-rename:focus {
-      outline: 2px solid rgba(96, 165, 250, 0.65);
-      outline-offset: 2px;
+      outline: none;
+      border-color: var(--room-ui-input-focus-border, rgba(96, 165, 250, 0.7));
+      box-shadow: 0 0 0 2px var(--room-ui-input-focus-shadow, rgba(37, 99, 235, 0.25));
+      background: var(--room-ui-input-bg-active, rgba(30, 41, 59, 0.92));
     }
     .inventory-empty {
       font-size: 13px;
@@ -272,14 +311,29 @@
     #stage {
       width: 100%;
       height: auto;
-      max-width: 900px;
-      border: 1px solid var(--room-ui-border);
-      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid var(--room-ui-border-soft);
+      background: var(--room-ui-viewport-bg);
+      border-radius: 16px;
       display: block;
+      max-width: none;
     }
     .workspace {
       display: grid;
       gap: 20px;
+    }
+    .canvas-info-tabs {
+      justify-content: flex-end;
+    }
+    .canvas-info-panel {
+      margin-top: 12px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--room-ui-border-soft);
+      background: var(--room-ui-surface);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+    }
+    .canvas-info-panel[hidden] {
+      display: none;
     }
     .export-panel {
       display: flex;
@@ -441,54 +495,63 @@
         </div>
         <div class="note">Switch to the custom layout to draw new walls, add doors, and place sockets on specific runs.</div>
       </div>
-      <div class="panel inventory-panel" id="inventoryPanel">
-        <h3>Inventory &amp; Fit Checks</h3>
-        <div class="note">Rename layout elements and confirm clearance at a glance.</div>
-        <div class="inventory-table-wrapper">
-          <table class="inventory-table" id="inventoryTable">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Type</th>
-                <th scope="col">Height</th>
-                <th scope="col">Width</th>
-                <th scope="col">Length</th>
-                <th scope="col">System Width</th>
-                <th scope="col">Door Width</th>
-                <th scope="col">Microscope Fits Through Entrance?</th>
-              </tr>
-            </thead>
-            <tbody id="inventoryTableBody"></tbody>
-          </table>
-          <div class="inventory-empty" id="inventoryEmpty">Add doors and equipment to populate this summary.</div>
-        </div>
-      </div>
-        <div class="panel legend">
-          <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
-          <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
-          <div><span class="dot" style="background:#22c55e"></span>Gas Socket</div>
-          <div><span class="dot" style="background:#0ea5e9"></span>Feedthrough</div>
-          <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
-          <div><span class="dot" style="background:#3949ab"></span>Table</div>
-          <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
-          <div><span class="dot" style="background:#1d4ed8"></span>Chiller</div>
-          <div><span class="dot" style="background:#14532d"></span>N2 Bottle</div>
-          <div><span class="dot" style="background:#f97316"></span>Bottled Air Line</div>
-          <div><span class="dot" style="background:#f59e0b"></span>Wall Thermostat</div>
-          <div><span class="dot" style="background:#fdba74"></span>Ceiling Thermostat</div>
-        </div>
     </aside>
     <section class="workspace">
       <div class="panel stage-panel">
         <div class="stage-panel-inner">
-          <div class="orientation-tabs" id="orientationTabs" role="group" aria-label="Surface orientation">
-            <button type="button" class="orientation-tab" data-orientation="floor" data-active="true" aria-pressed="true">Floor</button>
-            <button type="button" class="orientation-tab" data-orientation="wall:base:1" aria-pressed="false">Wall 1</button>
-            <button type="button" class="orientation-tab" data-orientation="wall:base:2" aria-pressed="false">Wall 2</button>
-            <button type="button" class="orientation-tab" data-orientation="wall:base:3" aria-pressed="false">Wall 3</button>
-            <button type="button" class="orientation-tab" data-orientation="wall:base:4" aria-pressed="false">Wall 4</button>
-            <button type="button" class="orientation-tab" data-orientation="ceiling" aria-pressed="false">Ceiling</button>
-            <button type="button" class="orientation-tab orientation-action" id="viewSelectedWall" aria-pressed="false">View Selected</button>
+          <div class="orientation-header">
+            <div class="orientation-tabs" id="orientationTabs" role="group" aria-label="Surface orientation">
+              <button type="button" class="orientation-tab" data-orientation="floor" data-active="true" aria-pressed="true">Floor</button>
+              <button type="button" class="orientation-tab" data-orientation="wall:base:1" aria-pressed="false">Wall 1</button>
+              <button type="button" class="orientation-tab" data-orientation="wall:base:2" aria-pressed="false">Wall 2</button>
+              <button type="button" class="orientation-tab" data-orientation="wall:base:3" aria-pressed="false">Wall 3</button>
+              <button type="button" class="orientation-tab" data-orientation="wall:base:4" aria-pressed="false">Wall 4</button>
+              <button type="button" class="orientation-tab" data-orientation="ceiling" aria-pressed="false">Ceiling</button>
+              <button type="button" class="orientation-tab orientation-action" id="viewSelectedWall" aria-pressed="false">View Selected</button>
+            </div>
+            <div class="canvas-info-tabs" id="canvasInfoTabs" role="group" aria-label="Canvas overlays">
+              <button type="button" class="orientation-tab orientation-info" data-panel="dimensions" aria-pressed="false" aria-controls="canvasPanel-dimensions">Dimensions</button>
+              <button type="button" class="orientation-tab orientation-info" data-panel="legend" aria-pressed="false" aria-controls="canvasPanel-legend">Legend</button>
+            </div>
+          </div>
+          <div class="canvas-info-panel inventory-panel" id="canvasPanel-dimensions" data-info-panel="dimensions" hidden>
+            <h3>Dimensions &amp; Fit</h3>
+            <div class="note">Rename layout elements and confirm clearance at a glance.</div>
+            <div class="inventory-table-wrapper">
+              <table class="inventory-table" id="inventoryTable">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Height</th>
+                    <th scope="col">Width</th>
+                    <th scope="col">Length</th>
+                    <th scope="col">System Width</th>
+                    <th scope="col">Door Width</th>
+                    <th scope="col">Microscope Fits Through Entrance?</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody"></tbody>
+              </table>
+              <div class="inventory-empty" id="inventoryEmpty">Add doors and equipment to populate this summary.</div>
+            </div>
+          </div>
+          <div class="canvas-info-panel legend" id="canvasPanel-legend" data-info-panel="legend" hidden>
+            <h3>Legend</h3>
+            <div class="legend-list">
+              <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
+              <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
+              <div><span class="dot" style="background:#22c55e"></span>Gas Socket</div>
+              <div><span class="dot" style="background:#0ea5e9"></span>Feedthrough</div>
+              <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
+              <div><span class="dot" style="background:#3949ab"></span>Table</div>
+              <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
+              <div><span class="dot" style="background:#1d4ed8"></span>Chiller</div>
+              <div><span class="dot" style="background:#14532d"></span>N2 Bottle</div>
+              <div><span class="dot" style="background:#f97316"></span>Bottled Air Line</div>
+              <div><span class="dot" style="background:#f59e0b"></span>Wall Thermostat</div>
+              <div><span class="dot" style="background:#fdba74"></span>Ceiling Thermostat</div>
+            </div>
           </div>
           <svg id="stage" width="900" height="640" viewBox="0 0 900 640">
             <!-- Room rectangle (scaled to fit) -->
@@ -553,10 +616,15 @@ const inventoryTableEl = document.getElementById('inventoryTable');
 const inventoryTableBody = document.getElementById('inventoryTableBody');
 const inventoryEmptyState = document.getElementById('inventoryEmpty');
 const orientationTabsEl = document.getElementById('orientationTabs');
+const canvasInfoTabsEl = document.getElementById('canvasInfoTabs');
 const viewSelectedWallBtn = document.getElementById('viewSelectedWall');
 const orientationButtons = orientationTabsEl
   ? Array.from(orientationTabsEl.querySelectorAll('[data-orientation]'))
   : [];
+const infoTabButtons = canvasInfoTabsEl
+  ? Array.from(canvasInfoTabsEl.querySelectorAll('[data-panel]'))
+  : [];
+const canvasInfoPanels = Array.from(document.querySelectorAll('[data-info-panel]'));
 
 const roomRect = document.getElementById('roomRect');
 const originDot = document.getElementById('origin');
@@ -1719,6 +1787,40 @@ function updateOrientationActiveState() {
     } else {
       viewSelectedWallBtn.textContent = baseLabel;
     }
+  }
+}
+
+let activeInfoPanelKey = null;
+
+function setInfoPanel(key) {
+  activeInfoPanelKey = key || null;
+  if (Array.isArray(infoTabButtons) && infoTabButtons.length > 0) {
+    infoTabButtons.forEach(btn => {
+      const panelKey = btn.dataset.panel;
+      const isActive = Boolean(activeInfoPanelKey && panelKey === activeInfoPanelKey);
+      btn.dataset.active = isActive ? 'true' : 'false';
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+  if (Array.isArray(canvasInfoPanels) && canvasInfoPanels.length > 0) {
+    canvasInfoPanels.forEach(panel => {
+      const panelKey = panel.dataset.infoPanel;
+      const isActive = Boolean(activeInfoPanelKey && panelKey === activeInfoPanelKey);
+      panel.hidden = !isActive;
+      panel.setAttribute('data-active', isActive ? 'true' : 'false');
+    });
+  }
+}
+
+function toggleInfoPanel(key) {
+  if (!key) {
+    setInfoPanel(null);
+    return;
+  }
+  if (activeInfoPanelKey === key) {
+    setInfoPanel(null);
+  } else {
+    setInfoPanel(key);
   }
 }
 
@@ -3114,6 +3216,16 @@ orientationButtons.forEach(btn => {
     setOrientation(key, { announce: true });
   });
 });
+
+if (Array.isArray(infoTabButtons) && infoTabButtons.length > 0) {
+  infoTabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panelKey = btn.dataset.panel;
+      toggleInfoPanel(panelKey);
+    });
+  });
+  setInfoPanel(null);
+}
 
 if (viewSelectedWallBtn) {
   viewSelectedWallBtn.addEventListener('click', () => {

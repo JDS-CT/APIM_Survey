@@ -67,3 +67,20 @@ persists the provided JSON object).
 
 If you need a known-good file for testing, `resources/layout_samples/default_room.json`
 matches the default survey preset.
+
+## Inventory summary & clearance checks
+
+The 2D survey sidebar now includes an **Inventory & Fit Checks** table so survey
+teams can rename walls, doors, and large equipment while reviewing critical
+dimensions in one place. Each row lists the item type, height, width, and length
+straight from the layout store, plus derived columns for system-versus-door
+clearance. Door widths populate automatically and microscopes compare their
+physical width against the widest available doorway to surface a boolean
+**Microscope Fits Through Entrance?** indicator. Renaming happens in-line and the
+changes persist with the rest of the layout snapshot.
+
+Derived measurements live in dedicated helpers (e.g.,
+`computeMicroscopeFitForWidth`) so additional clearance checks can slot into the
+table without rewriting the UI plumbing. As new equipment requirements emerge,
+extend those helpers or introduce new ones and add a matching table column to
+surface the comparison.

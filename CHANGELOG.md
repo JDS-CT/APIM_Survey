@@ -1,6 +1,9 @@
 
 # Changelog
 
+## 2025-10-04T17:21:24Z
+- feat: complete step [p1] Stand up an editable inventory table with rename inputs, derived fit checks, and documentation guidance for future parameters.
+
 ## 2025-10-04T17:06:49Z
 - feat: complete step [p1] Align wall elevation drag interactions with the shared floor snap pipeline so wall tab edits honor snap increments and HUD feedback.
 - feat: complete step [p1] Rework default cable sag so untouched splines drop to the floor quickly and track the 2D path via updated control point defaults and markup tests.

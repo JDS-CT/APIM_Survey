@@ -154,6 +154,18 @@ def test_room_survey_provides_wall_elevation_and_scale_overlay() -> None:
     assert "const SCALE_OVERLAY_CONFIG" in html
 
 
+def test_room_survey_inventory_table_with_fit_checks() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="inventoryPanel"' in html
+    assert 'id="inventoryTable"' in html
+    assert "Microscope Fits Through Entrance?" in html
+    assert "function renderInventoryTable" in html
+    assert "function computeMicroscopeFitForWidth" in html
+
+
 def test_wall_elevation_uses_shared_snap_drag_pipeline() -> None:
     html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
         encoding="utf-8"

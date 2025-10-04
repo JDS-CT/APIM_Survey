@@ -503,7 +503,13 @@
   </main>
 
   <script src="../shared/scripts/cable_catalog_defaults.js"></script>
-  <script>
+  <script type="module">
+    import {
+      normalizeOrientation,
+      orientationKeyFromState,
+      parseOrientationKey,
+      snapshotOrientation,
+    } from './orientation_helpers.js';
 
 const bodyEl = document.body;
 const svg = document.getElementById('stage');
@@ -982,6 +988,7 @@ function snapshotLayout() {
     snap_mm: Math.round(state.snap),
     imperial_display: !!state.imperial,
     mode: state.mode,
+    orientation: snapshotOrientation(state.orientation),
     floor_items: state.floorItems.map(item => {
       const snapshot = {
         id: item.id,
@@ -1228,9 +1235,16 @@ function applyLayout(raw, { skipPersist = false, message } = {}) {
     recomputeScale();
     clampStateToRoom();
     const nextMode = typeof layout.mode === 'string' ? layout.mode : state.mode;
-    setMode(nextMode || 'basic');
     const surface = normalizeSelectedSurface(layout.selected_surface);
+    const orientation = normalizeOrientation(layout.orientation, {
+      selectedSurface: surface,
+      resolveWallRef: resolveWallRefFromSelection,
+      fallback: state.orientation,
+    });
+    setMode(nextMode || 'basic');
+    setOrientation(orientationKeyFromState(orientation), { skipRender: true });
     setSelectedSurface(surface, { skipRender: true });
+    render();
   } finally {
     suppressPersist = false;
   }
@@ -1565,6 +1579,20 @@ function listAllWalls() {
   return [...base, ...customs].map(enrichWallGeometry).filter(Boolean);
 }
 
+function resolveWallRefFromSelection(surface) {
+  if (!surface || typeof surface !== 'object') return null;
+  if (surface.type === 'wall') return surface.ref || null;
+  if (surface.type === 'wallItem') {
+    const match = state.wallItems.find(item => item.id === surface.id);
+    return match ? match.wall : null;
+  }
+  if (surface.type === 'door') {
+    const door = state.doors.find(d => d.id === surface.id);
+    return door ? door.wall : null;
+  }
+  return null;
+}
+
 function orientationType() {
   return state.orientation && state.orientation.type ? state.orientation.type : 'floor';
 }
@@ -1576,30 +1604,6 @@ function isPlanViewActive() {
 
 function isWallOrientation() {
   return orientationType() === 'wall';
-}
-
-function parseOrientationKey(key) {
-  if (!key || typeof key !== 'string') {
-    return { type: 'floor' };
-  }
-  if (key === 'floor') return { type: 'floor' };
-  if (key === 'ceiling') return { type: 'ceiling' };
-  if (key.startsWith('wall:')) {
-    const ref = key.slice(5);
-    return { type: 'wall', ref };
-  }
-  return { type: 'floor' };
-}
-
-function orientationKeyFromState(orientation) {
-  if (!orientation || typeof orientation !== 'object') return 'floor';
-  if (orientation.type === 'floor') return 'floor';
-  if (orientation.type === 'ceiling') return 'ceiling';
-  if (orientation.type === 'wall') {
-    const ref = orientation.ref || '';
-    return ref ? `wall:${ref}` : 'wall';
-  }
-  return 'floor';
 }
 
 function describeOrientation(orientation) {

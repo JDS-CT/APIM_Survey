@@ -1,6 +1,10 @@
 
 # Changelog
 
+## 2025-10-07T03:30:00Z
+- feat: complete step [p1] Reflow the 2D survey controls and theme so the canvas and tabs fill the viewport while inventory and legend details live in compact overlays.
+- style: refresh dark/light theme input tokens for consistent contrast on form fields.
+
 ## 2025-10-06T19:15:00Z
 - feat: complete step [p1] Restore wall elevation drag snapping with the shared floor pipeline and remove the legacy mount height panel.
 - test: add drag snap module coverage plus markup checks for the shared snap import and wall HUD updates.

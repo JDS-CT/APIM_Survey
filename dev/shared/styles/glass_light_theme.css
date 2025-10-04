@@ -14,6 +14,13 @@
   --room-ui-overlay-bg: rgba(17,24,39,0.72);
   --room-ui-overlay-text: #f8fafc;
   --room-ui-overlay-shadow: rgba(15,23,42,0.35);
+  --room-ui-input-bg: rgba(255,255,255,0.95);
+  --room-ui-input-bg-active: rgba(255,255,255,1);
+  --room-ui-input-border: rgba(31,41,51,0.16);
+  --room-ui-input-text: rgba(31,41,51,0.85);
+  --room-ui-input-placeholder: rgba(100,116,139,0.75);
+  --room-ui-input-focus-border: rgba(37,99,235,0.55);
+  --room-ui-input-focus-shadow: rgba(37,99,235,0.3);
   --room-ui-info-bg: rgba(255,255,255,0.7);
   --room-ui-info-border: rgba(31,41,51,0.12);
   --room-ui-legend-text: rgba(31,41,51,0.7);

@@ -15,6 +15,13 @@ body[data-room-theme="glass-dark"] {
   --room-ui-overlay-bg: rgba(8, 15, 30, 0.82);
   --room-ui-overlay-text: #e2e8f0;
   --room-ui-overlay-shadow: rgba(30, 64, 175, 0.35);
+  --room-ui-input-bg: rgba(17, 24, 39, 0.78);
+  --room-ui-input-bg-active: rgba(17, 24, 39, 0.92);
+  --room-ui-input-border: rgba(148, 163, 184, 0.32);
+  --room-ui-input-text: rgba(226, 232, 240, 0.95);
+  --room-ui-input-placeholder: rgba(148, 163, 184, 0.7);
+  --room-ui-input-focus-border: rgba(96, 165, 250, 0.75);
+  --room-ui-input-focus-shadow: rgba(37, 99, 235, 0.35);
   --room-ui-info-bg: rgba(15, 23, 42, 0.7);
   --room-ui-info-border: rgba(148, 163, 184, 0.16);
   --room-ui-legend-text: rgba(226, 232, 240, 0.85);

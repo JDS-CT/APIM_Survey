@@ -82,6 +82,40 @@
           "allowedCableTypes": ["power", "ground"]
         }
       ]
+    },
+    "wall_gas_socket": {
+      "boundingBox_mm": { "w": 400, "l": 120, "h": 600 },
+      "connectionSockets": [
+        {
+          "id": "wall_gas_outlet",
+          "label": "Gas Outlet",
+          "anchor": { "u": 0.5, "v": 0.5, "w": 0.5 },
+          "surface": "wall",
+          "allowedCableTypes": ["air", "n2", "vacuum"],
+          "offsetDirection": 1
+        }
+      ]
+    },
+    "wall_feedthrough": {
+      "boundingBox_mm": { "w": 400, "l": 120, "h": 600 },
+      "connectionSockets": [
+        {
+          "id": "feedthrough_room",
+          "label": "Feedthrough (Room Side)",
+          "anchor": { "u": 0.5, "v": 0.5, "w": 0.5 },
+          "surface": "wall",
+          "allowedCableTypes": ["power", "air", "n2", "vacuum", "water", "ethernet", "ground"],
+          "offsetDirection": 1
+        },
+        {
+          "id": "feedthrough_service",
+          "label": "Feedthrough (Service Side)",
+          "anchor": { "u": 0.5, "v": 0.5, "w": 0.5 },
+          "surface": "wall",
+          "allowedCableTypes": ["power", "air", "n2", "vacuum", "water", "ethernet", "ground"],
+          "offsetDirection": -1
+        }
+      ]
     }
   }
 }

@@ -11,6 +11,10 @@ Prototypes should target draggable Bézier splines and, if feasible, a physics-b
 ✅ [p1] Implement 2D survey affordances for sockets (hover highlights) and Bézier cable drawing/editing, including snapping control handles and persistence of bend points.
 ✅ [p1] Render cable paths in the FPV demo via Three.js lines/tubes, reusing layout cables and mirroring color coding for cable types.
 ✅ [p1] Add focused regression coverage asserting cable metadata availability and layout serialization fields so future refactors keep the feature intact.
+✅ [p2] Diagnose why cables fail to render in FPV view and update the Three.js scene graph so saved cables become visible.
+✅ [p2] Add a wall-mounted gas socket asset with metadata (type tags, cable compatibility, thumbnail) and expose it in the catalog.
+✅ [p2] Introduce a wall feedthrough asset that provides paired connection sockets on both sides of a wall and persists placement metadata.
+✅ [p2] Expose connection anchors on bulky equipment meshes so users can attach cables/lines without mesh occlusion (adjust anchor offsets or hit areas).
  🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
 🔲 [p2] Add an automated check that first-person mode stops moving when no input is pressed.
 🔲 [p2] Backfill regression coverage for the new FPS module loader path or document why automated coverage is deferred.

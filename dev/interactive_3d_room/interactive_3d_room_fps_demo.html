@@ -342,6 +342,66 @@
       [ASSET_FLOOR_ITEM_TYPE]: { label: 'GLTF Asset', wmm: 2000, lmm: 2000, color: 0x8b5cf6, height: 0.2 }
     };
 
+    const ALL_CATALOG_TYPES = window.DEFAULT_CABLE_CATALOG && window.DEFAULT_CABLE_CATALOG.cableTypes
+      ? Object.keys(window.DEFAULT_CABLE_CATALOG.cableTypes)
+      : ['power', 'ground', 'air', 'n2', 'vacuum', 'water', 'ethernet'];
+
+    const WALL_ITEM_META = {
+      socket: {
+        label: 'Wall Socket',
+        assetKey: 'wall_socket',
+        defaultDepthMm: 300,
+        fallbackSockets: [
+          {
+            id: 'wall_outlet_duplex',
+            label: 'Duplex Outlet',
+            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+            allowedCableTypes: ['power', 'ground'],
+            surface: 'wall',
+            offsetDirection: 1
+          }
+        ]
+      },
+      gas_socket: {
+        label: 'Gas Socket',
+        assetKey: 'wall_gas_socket',
+        defaultDepthMm: 300,
+        fallbackSockets: [
+          {
+            id: 'wall_gas_outlet',
+            label: 'Gas Outlet',
+            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+            allowedCableTypes: ['air', 'n2', 'vacuum'],
+            surface: 'wall',
+            offsetDirection: 1
+          }
+        ]
+      },
+      feedthrough: {
+        label: 'Feedthrough',
+        assetKey: 'wall_feedthrough',
+        defaultDepthMm: 200,
+        fallbackSockets: [
+          {
+            id: 'feedthrough_room',
+            label: 'Feedthrough (Room Side)',
+            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+            allowedCableTypes: ALL_CATALOG_TYPES,
+            surface: 'wall',
+            offsetDirection: 1
+          },
+          {
+            id: 'feedthrough_service',
+            label: 'Feedthrough (Service Side)',
+            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+            allowedCableTypes: ALL_CATALOG_TYPES,
+            surface: 'wall',
+            offsetDirection: -1
+          }
+        ]
+      }
+    };
+
     const CABLE_CATALOG_URL = '../resources/layout_samples/catalog.json';
     const FALLBACK_CABLE_COLORS = (function () {
       if (!window.DEFAULT_CABLE_CATALOG || !window.DEFAULT_CABLE_CATALOG.cableTypes) {
@@ -355,6 +415,7 @@
       );
     })();
     const DEFAULT_CABLE_RADIUS_M = 0.025;
+    const CABLE_SAMPLE_SEGMENTS = 48;
 
     const HAND_MODE_TOGGLE_KEY = 'Control';
     const HAND_MODE_ROTATE_STEP = THREE.MathUtils.degToRad(5);
@@ -793,11 +854,15 @@
       let wallRef = item.wall;
       if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
       if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+      const type = typeof item.type === 'string' ? item.type : 'socket';
+      const meta = WALL_ITEM_META[type] || WALL_ITEM_META.socket;
+      const depth = item.h !== undefined ? item.h : meta.defaultDepthMm;
       return {
         ...item,
+        type,
         wall: wallRef || 'base:1',
         s: toNumber(item.s, 0),
-        h: toNumber(item.h, 0)
+        h: toNumber(depth, meta.defaultDepthMm)
       };
     }
 
@@ -1010,18 +1075,30 @@
         if (!item) return null;
         const geom = getWallGeometry(item.wall);
         if (!geom) return null;
+        const type = typeof item.type === 'string' ? item.type : 'socket';
+        const wallMeta = WALL_ITEM_META[type] || WALL_ITEM_META.socket;
         const assets = cableCatalogData && cableCatalogData.assets ? cableCatalogData.assets : {};
-        const meta = assets.wall_socket || {};
-        const socket = (meta.connectionSockets || []).find(s => s.id === ref.socketId) || (meta.connectionSockets || [])[0] || null;
+        const assetKey = wallMeta.assetKey || 'wall_socket';
+        const meta = assets[assetKey] || {};
+        const socketsMeta = Array.isArray(meta.connectionSockets) && meta.connectionSockets.length
+          ? meta.connectionSockets
+          : wallMeta.fallbackSockets || [];
+        const socket = socketsMeta.find(s => s.id === ref.socketId) || socketsMeta[0] || null;
         const anchor = socket && socket.anchor ? socket.anchor : { u: 0.5, v: 0.5, w: 0.5 };
         const offset = clamp(toNumber(item.s, 0), 0, geom.length);
         const base = pointAlongWall(geom, offset);
-        const depth = clamp(toNumber(item.h, 0), 0, 4000);
+        const rawDepth = toNumber(item.h, wallMeta.defaultDepthMm);
+        const depthMagnitude = clamp(Math.abs(rawDepth), 0, 4000);
+        const offsetDirection = socket && socket.offsetDirection !== undefined
+          ? Math.sign(socket.offsetDirection) || 1
+          : 1;
+        const depth = depthMagnitude * offsetDirection;
         const tip = {
           x: base.x + geom.normal.x * depth,
           y: base.y + geom.normal.y * depth
         };
-        const height = (meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : ROOM_HEIGHT_MM) * (anchor.w || 0.5);
+        const bboxHeight = meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : ROOM_HEIGHT_MM;
+        const height = bboxHeight * (anchor.w || 0.5);
         return { x: tip.x, y: tip.y, z: height };
       }
       return null;

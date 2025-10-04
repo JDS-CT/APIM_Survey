@@ -1,5 +1,11 @@
 # Changelog
 
+## 2025-10-05T04:30:00Z
+- fix: complete step [p2] Restore FPV cable rendering by defining shared sample density constants and honoring wall socket offset directions.
+- feat: complete step [p2] Add catalog metadata and UI affordances for wall-mounted gas sockets and dual-sided feedthroughs across survey and FPV views.
+- fix: complete step [p2] Surface wall connection anchors above equipment meshes so sockets remain clickable when placing cables.
+- test: extend frontend markup coverage for the new wall item options and FPV cable sampling guard.
+
 ## 2025-10-05T00:00:00Z
 - feat: complete step [p1] Ship a shared cable catalog default script and fallbacks so cable type dropdowns populate even when the external JSON fails to load.
 - feat: complete step [p1] Teach both survey and FPV views to reuse the shared defaults for color-coded cable rendering across power, air, N2, ground, vacuum, water, and Ethernet lines.

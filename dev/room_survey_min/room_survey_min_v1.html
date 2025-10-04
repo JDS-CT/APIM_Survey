@@ -251,11 +251,13 @@
               <option value="microscope">Microscope</option>
               <option value="table">Table</option>
               <option value="pump">Vacuum Pump</option>
-              <option value="socket">Wall Socket</option>
+              <option value="socket">Wall Socket (Power)</option>
+              <option value="gas_socket">Gas Socket</option>
+              <option value="feedthrough">Wall Feedthrough</option>
             </select>
           </label>
           <label class="wall-choice">
-            Wall for socket:
+            Wall for wall item:
             <select id="wallSel"></select>
           </label>
           <button class="btn" id="add">Add</button>
@@ -269,7 +271,9 @@
       </div>
       <div class="panel legend">
         <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
-        <div><span class="dot" style="background:#f9a825"></span>Socket</div>
+        <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
+        <div><span class="dot" style="background:#22c55e"></span>Gas Socket</div>
+        <div><span class="dot" style="background:#0ea5e9"></span>Feedthrough</div>
         <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
         <div><span class="dot" style="background:#3949ab"></span>Table</div>
         <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
@@ -350,6 +354,78 @@ const FLOOR_ITEM_DEFS = {
   gltfAsset: { label: 'GLTF Asset', w: 2000, l: 2000, fill: '#8b5cf6', stroke: '#6d28d9' }
 };
 
+const ALL_DEFAULT_CABLE_TYPES = (window.DEFAULT_CABLE_CATALOG && window.DEFAULT_CABLE_CATALOG.cableTypes)
+  ? Object.keys(window.DEFAULT_CABLE_CATALOG.cableTypes)
+  : ['power', 'ground', 'air', 'n2', 'vacuum', 'water', 'ethernet'];
+
+const WALL_ITEM_DEFS = {
+  socket: {
+    label: 'Wall Socket',
+    idPrefix: 'socket',
+    fill: '#f9a825',
+    stroke: '#aa7a00',
+    assetKey: 'wall_socket',
+    defaultDepth: 300,
+    depthDirections: [1],
+    fallbackSockets: [
+      {
+        id: 'wall_outlet_duplex',
+        label: 'Duplex Outlet',
+        anchor: { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: ['power', 'ground'],
+        surface: 'wall',
+        offsetDirection: 1
+      }
+    ]
+  },
+  gas_socket: {
+    label: 'Gas Socket',
+    idPrefix: 'gas',
+    fill: '#22c55e',
+    stroke: '#15803d',
+    assetKey: 'wall_gas_socket',
+    defaultDepth: 300,
+    depthDirections: [1],
+    fallbackSockets: [
+      {
+        id: 'wall_gas_outlet',
+        label: 'Gas Outlet',
+        anchor: { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: ['air', 'n2', 'vacuum'],
+        surface: 'wall',
+        offsetDirection: 1
+      }
+    ]
+  },
+  feedthrough: {
+    label: 'Feedthrough',
+    idPrefix: 'feed',
+    fill: '#0ea5e9',
+    stroke: '#0369a1',
+    assetKey: 'wall_feedthrough',
+    defaultDepth: 200,
+    depthDirections: [1, -1],
+    fallbackSockets: [
+      {
+        id: 'feedthrough_room',
+        label: 'Feedthrough (Room Side)',
+        anchor: { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: ALL_DEFAULT_CABLE_TYPES,
+        surface: 'wall',
+        offsetDirection: 1
+      },
+      {
+        id: 'feedthrough_service',
+        label: 'Feedthrough (Service Side)',
+        anchor: { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: ALL_DEFAULT_CABLE_TYPES,
+        surface: 'wall',
+        offsetDirection: -1
+      }
+    ]
+  }
+};
+
 const DEFAULT_ROOM_PRESET = () => ({
   room: { W: 6000, L: 8000 },
   floor_items: [
@@ -424,10 +500,15 @@ function applyDefaultPreset() {
       rotation: item.rotation || 0
     };
   });
-  state.wallItems = preset.wall_items.map(item => ({
-    id: genId(item.type === 'socket' ? 'socket' : 'wallItem'),
-    ...item
-  }));
+  state.wallItems = preset.wall_items.map(item => {
+    const type = item.type || 'socket';
+    const def = WALL_ITEM_DEFS[type] || WALL_ITEM_DEFS.socket;
+    return {
+      id: genId(def.idPrefix || 'wallItem'),
+      ...item,
+      type
+    };
+  });
   state.customWalls = [];
   state.doors = [];
   state.selectedSurface = { type: 'floor' };
@@ -457,16 +538,19 @@ function normalizeFloorItemFromLayout(item) {
 
 function normalizeWallItemFromLayout(item) {
   if (!item || typeof item !== 'object') return null;
-  const id = item.id !== undefined ? String(item.id) : genId('wallItem');
+  const type = item.type || 'socket';
+  const def = WALL_ITEM_DEFS[type] || WALL_ITEM_DEFS.socket;
+  const id = item.id !== undefined ? String(item.id) : genId(def.idPrefix || 'wallItem');
   let wallRef = item.wall;
   if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
   if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
+  const depth = item.h !== undefined ? item.h : def.defaultDepth;
   return {
     id,
-    type: item.type || 'socket',
+    type,
     wall: wallRef || 'base:1',
     s: toNumber(item.s, 0),
-    h: toNumber(item.h, 0)
+    h: toNumber(depth, def.defaultDepth)
   };
 }
 
@@ -800,7 +884,7 @@ function resnapAll() {
     if (typeof item.y === 'number') item.y = snapValue(item.y);
   });
   state.wallItems.forEach(item => {
-    if (item.type === 'socket') {
+    if (WALL_ITEM_DEFS[item.type]) {
       if (typeof item.s === 'number') item.s = snapValue(item.s);
       if (typeof item.h === 'number') item.h = snapValue(item.h);
     }
@@ -978,15 +1062,16 @@ function projectPointOntoWall(geom, point) {
   };
 }
 
-function wallShToXY(wallRef, s, h) {
+function wallShToXY(wallRef, s, depthMm) {
   const geom = getWallGeometry(wallRef);
   if (!geom) return null;
   const offset = clamp(s, 0, geom.length);
   const baseMm = pointAlongWall(geom, offset);
-  const depthMm = clamp(h, 0, 4000);
+  const magnitude = clamp(Math.abs(depthMm), 0, 4000);
+  const direction = depthMm < 0 ? -1 : 1;
   const tipMm = {
-    x: baseMm.x + geom.normal.x * depthMm,
-    y: baseMm.y + geom.normal.y * depthMm
+    x: baseMm.x + geom.normal.x * magnitude * direction,
+    y: baseMm.y + geom.normal.y * magnitude * direction
   };
   const basePx = mmToPx(baseMm.x, baseMm.y);
   const tipPx = mmToPx(tipMm.x, tipMm.y);
@@ -1078,9 +1163,11 @@ function defaultHudMessage() {
     sel = def ? def.label : 'Floor item';
   } else if (surface?.type === 'wallItem') {
     const item = state.wallItems.find(w => w.id === surface.id);
-    if (item?.type === 'socket') {
+    if (item) {
+      const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
       const geom = getWallGeometry(item.wall);
-      sel = geom ? `Socket on ${geom.label}` : 'Socket';
+      const label = def.label || 'Wall item';
+      sel = geom ? `${label} on ${geom.label}` : label;
     } else {
       sel = 'Wall item';
     }
@@ -1263,39 +1350,56 @@ function renderDoors() {
 function renderWallItems() {
   wallItemsG.innerHTML = '';
   state.wallItems.forEach(it => {
-    if (it.type !== 'socket') return;
-    const data = wallShToXY(it.wall, it.s, it.h);
-    if (!data) return;
-    const wh = 16;
-    const base = data.base;
-    const tip = data.tip;
+    const def = WALL_ITEM_DEFS[it.type] || WALL_ITEM_DEFS.socket;
+    const directions = def.depthDirections && def.depthDirections.length ? def.depthDirections : [1];
+    const depthMm = toNumber(it.h, def.defaultDepth);
+    const primaryData = wallShToXY(it.wall, it.s, depthMm * directions[0]);
+    if (!primaryData) return;
+    const base = primaryData.base;
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    const mk = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    mk.setAttribute('x', base[0] - wh / 2);
-    mk.setAttribute('y', base[1] - wh / 2);
-    mk.setAttribute('width', wh);
-    mk.setAttribute('height', wh);
-    mk.setAttribute('fill', '#f9a825');
-    mk.setAttribute('stroke', '#aa7a00');
-    mk.dataset.wallItemId = it.id;
-    mk.addEventListener('pointerdown', handleSocketAlongDragStart);
+    const wh = 16;
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    marker.setAttribute('x', base[0] - wh / 2);
+    marker.setAttribute('y', base[1] - wh / 2);
+    marker.setAttribute('width', wh);
+    marker.setAttribute('height', wh);
+    marker.setAttribute('fill', def.fill);
+    marker.setAttribute('stroke', def.stroke);
+    marker.dataset.wallItemId = it.id;
+    marker.addEventListener('pointerdown', handleSocketAlongDragStart);
 
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', base[0]);
-    line.setAttribute('y1', base[1]);
-    line.setAttribute('x2', tip[0]);
-    line.setAttribute('y2', tip[1]);
-    line.setAttribute('stroke', '#f9a825');
-    line.setAttribute('stroke-width', 2);
-    line.dataset.wallItemId = it.id;
-    line.addEventListener('pointerdown', handleSocketHeightDragStart);
+    const primaryLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    primaryLine.setAttribute('x1', base[0]);
+    primaryLine.setAttribute('y1', base[1]);
+    primaryLine.setAttribute('x2', primaryData.tip[0]);
+    primaryLine.setAttribute('y2', primaryData.tip[1]);
+    primaryLine.setAttribute('stroke', def.fill);
+    primaryLine.setAttribute('stroke-width', 2);
+    primaryLine.dataset.wallItemId = it.id;
+    primaryLine.addEventListener('pointerdown', handleSocketHeightDragStart);
 
     if (state.selectedSurface?.type === 'wallItem' && state.selectedSurface.id === it.id) {
       g.classList.add('selected-wall-item');
     }
 
-    g.appendChild(line);
-    g.appendChild(mk);
+    g.appendChild(primaryLine);
+
+    directions.slice(1).forEach(direction => {
+      const alt = wallShToXY(it.wall, it.s, depthMm * direction);
+      if (!alt) return;
+      const extraLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      extraLine.setAttribute('x1', base[0]);
+      extraLine.setAttribute('y1', base[1]);
+      extraLine.setAttribute('x2', alt.tip[0]);
+      extraLine.setAttribute('y2', alt.tip[1]);
+      extraLine.setAttribute('stroke', def.fill);
+      extraLine.setAttribute('stroke-width', 2);
+      extraLine.setAttribute('stroke-dasharray', '4 4');
+      extraLine.style.pointerEvents = 'none';
+      g.appendChild(extraLine);
+    });
+
+    g.appendChild(marker);
     wallItemsG.appendChild(g);
   });
 }
@@ -1455,7 +1559,8 @@ document.addEventListener('pointermove', evt => {
     if (!geom) return;
     const proj = projectPointOntoWall(geom, roomPt);
     item.s = snapValue(proj.s);
-    showHud(`Socket offset ${fmtLen(item.s)} on ${geom.label}`);
+    const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+    showHud(`${def.label} offset ${fmtLen(item.s)} on ${geom.label}`);
     render();
   } else if (drag.kind === 'socketH') {
     const item = state.wallItems.find(w => w.id === drag.id);
@@ -1463,9 +1568,10 @@ document.addEventListener('pointermove', evt => {
     const geom = getWallGeometry(item.wall);
     if (!geom) return;
     const proj = projectPointOntoWall(geom, roomPt);
-    const height = clamp(proj.distance, 0, 4000);
-    item.h = snapValue(height);
-    showHud(`Socket height ${fmtLen(item.h)} on ${geom.label}`);
+    const standoff = clamp(Math.abs(proj.distance), 0, 4000);
+    item.h = snapValue(standoff);
+    const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+    showHud(`${def.label} standoff ${fmtLen(item.h)} on ${geom.label}`);
     render();
   } else if (drag.kind === 'wall-move') {
     const wall = getCustomWallById(drag.wallId);
@@ -1675,18 +1781,26 @@ basicAddBtn.addEventListener('click', () => {
 
 addBtn.addEventListener('click', () => {
   const type = addType.value;
-  if (type === 'socket') {
+  if (WALL_ITEM_DEFS[type]) {
+    const def = WALL_ITEM_DEFS[type];
     const wallRef = wallSel.value;
     const geom = getWallGeometry(wallRef);
     if (!geom) {
-      showHud('Select a wall before adding sockets');
+      showHud('Select a wall before adding wall items');
       return;
     }
     const s = snapValue(geom.length / 2);
-    const item = { id: genId('socket'), type: 'socket', wall: wallRef, s, h: snapValue(300) };
+    const depth = snapValue(def.defaultDepth);
+    const item = {
+      id: genId(def.idPrefix || 'wallItem'),
+      type,
+      wall: wallRef,
+      s,
+      h: depth
+    };
     state.wallItems.push(item);
     setSelectedSurface({ type: 'wallItem', id: item.id });
-    showHud(`Socket added to ${geom.label}`);
+    showHud(`${def.label} added to ${geom.label}`);
     render();
   } else {
     const def = FLOOR_ITEM_DEFS[type] || FLOOR_ITEM_DEFS.floorBox;
@@ -1903,27 +2017,27 @@ function listCableSockets() {
     });
   });
   (state.wallItems || []).forEach(item => {
-    if (item.type !== 'socket') return;
-    const meta = assetsCatalog.wall_socket || {};
+    const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+    const assetType = def.assetKey || 'wall_socket';
+    const meta = assetsCatalog[assetType] || {};
     const socketsMeta = Array.isArray(meta.connectionSockets) && meta.connectionSockets.length
       ? meta.connectionSockets
-      : [{
-          id: 'wall_outlet_duplex',
-          label: 'Wall Socket',
-          anchor: { u: 0.5, v: 0.5, w: 0.5 },
-          allowedCableTypes: ['power', 'ground'],
-          surface: 'wall'
-        }];
+      : def.fallbackSockets || [];
     socketsMeta.forEach(socket => {
+      const offsetDirection = socket.offsetDirection !== undefined
+        ? Math.sign(socket.offsetDirection) || 1
+        : 1;
       sockets.push({
         kind: 'wall',
         assetId: item.id,
-        assetType: 'wall_socket',
+        assetType,
         socketId: socket.id,
         label: `${socket.label} (${item.id})`,
         anchor: socket.anchor || { u: 0.5, v: 0.5, w: 0.5 },
         allowedCableTypes: socket.allowedCableTypes || [],
-        surface: socket.surface || 'wall'
+        surface: socket.surface || 'wall',
+        offsetDirection,
+        defaultDepth: def.defaultDepth
       });
     });
   });
@@ -1962,17 +2076,30 @@ function resolveSocketPosition(ref) {
     const geom = getWallGeometry(item.wall);
     if (!geom) return null;
     const assets = (cableCatalog && cableCatalog.assets) || {};
-    const meta = assets.wall_socket || {};
-    const socket = (meta.connectionSockets || []).find(s => s.id === ref.socketId) || (meta.connectionSockets || [])[0] || null;
+    const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+    const assetType = def.assetKey || 'wall_socket';
+    const meta = assets[assetType] || {};
+    const socketsMeta = Array.isArray(meta.connectionSockets) && meta.connectionSockets.length
+      ? meta.connectionSockets
+      : def.fallbackSockets || [];
+    const socket = socketsMeta.find(s => s.id === ref.socketId) || socketsMeta[0] || null;
     const anchor = socket && socket.anchor ? socket.anchor : { u: 0.5, v: 0.5, w: 0.5 };
     const offset = clamp(toNumber(item.s, 0), 0, geom.length);
     const base = pointAlongWall(geom, offset);
-    const depth = clamp(toNumber(item.h, 0), 0, 4000);
+    const rawDepth = toNumber(item.h, def.defaultDepth);
+    const depthMagnitude = clamp(Math.abs(rawDepth), 0, 4000);
+    const offsetDirection = ref.offsetDirection !== undefined
+      ? Math.sign(ref.offsetDirection) || 1
+      : socket && socket.offsetDirection !== undefined
+        ? Math.sign(socket.offsetDirection) || 1
+        : 1;
+    const depth = depthMagnitude * offsetDirection;
     const tip = {
       x: base.x + geom.normal.x * depth,
       y: base.y + geom.normal.y * depth
     };
-    const height = (meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : DEFAULT_ROOM_HEIGHT_MM) * (anchor.w || 0.5);
+    const heightBasis = meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : DEFAULT_ROOM_HEIGHT_MM;
+    const height = heightBasis * (anchor.w || 0.5);
     return { x: tip.x, y: tip.y, z: height };
   }
   return null;
@@ -2391,7 +2518,7 @@ function renderSocketOverlay() {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', px);
     circle.setAttribute('cy', py);
-    circle.setAttribute('r', 8);
+    circle.setAttribute('r', 12);
     circle.classList.add('socket-target');
     circle.dataset.socketKey = key;
     const cableType = cableTypeSelectEl && cableTypeSelectEl.value ? cableTypeSelectEl.value : null;
@@ -2576,10 +2703,11 @@ function insertCableBendPoint(cable, approxPoint) {
   cableHandlesLayerEl.setAttribute('id', 'cableHandlesLayer');
   socketOverlayEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   socketOverlayEl.setAttribute('id', 'socketOverlay');
-  if (floorItemsG) {
-    floorItemsG.before(socketOverlayEl);
-    floorItemsG.before(cableHandlesLayerEl);
-    floorItemsG.before(cablesLayerEl);
+  if (floorItemsG && floorItemsG.parentNode) {
+    const parent = floorItemsG.parentNode;
+    parent.insertBefore(cablesLayerEl, floorItemsG.nextSibling);
+    parent.insertBefore(cableHandlesLayerEl, cablesLayerEl.nextSibling);
+    parent.insertBefore(socketOverlayEl, cableHandlesLayerEl.nextSibling);
   }
   if (!Array.isArray(state.cables)) {
     state.cables = [];

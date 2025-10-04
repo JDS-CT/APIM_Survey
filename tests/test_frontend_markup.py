@@ -115,6 +115,8 @@ def test_room_survey_exposes_cable_controls_and_rendering() -> None:
     assert "normalizeCableCatalogWithDefaults" in html
     assert "function renderCables()" in html
     assert "cables: state.cables.map" in html
+    assert 'value="gas_socket"' in html
+    assert 'value="feedthrough"' in html
 
 
 def test_room_survey_exposes_cable_bend_points() -> None:
@@ -136,3 +138,4 @@ def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
     assert "const CABLE_CATALOG_URL" in html
     assert "normalizeCableCatalogWithDefaults" in html
     assert "async function refreshCableMeshes" in html
+    assert "const CABLE_SAMPLE_SEGMENTS" in html

@@ -101,6 +101,41 @@
       display: grid;
       gap: 12px;
     }
+    .orientation-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .orientation-tab {
+      appearance: none;
+      font: inherit;
+      font-size: 13px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--room-ui-border-soft);
+      background: var(--room-ui-surface);
+      color: inherit;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }
+    .orientation-tab:hover {
+      border-color: rgba(59, 130, 246, 0.6);
+      color: var(--room-ui-link);
+    }
+    .orientation-tab[data-active="true"] {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.45);
+      color: var(--room-ui-link);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+    }
+    .orientation-tab:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.65);
+      outline-offset: 2px;
+    }
+    .orientation-tab.orientation-action {
+      border-style: dashed;
+    }
     .row {
       display: flex;
       gap: 14px;
@@ -282,6 +317,15 @@
     <section class="workspace">
       <div class="panel stage-panel">
         <div class="stage-panel-inner">
+          <div class="orientation-tabs" id="orientationTabs" role="group" aria-label="Surface orientation">
+            <button type="button" class="orientation-tab" data-orientation="floor" data-active="true" aria-pressed="true">Floor</button>
+            <button type="button" class="orientation-tab" data-orientation="wall:base:1" aria-pressed="false">Wall 1</button>
+            <button type="button" class="orientation-tab" data-orientation="wall:base:2" aria-pressed="false">Wall 2</button>
+            <button type="button" class="orientation-tab" data-orientation="wall:base:3" aria-pressed="false">Wall 3</button>
+            <button type="button" class="orientation-tab" data-orientation="wall:base:4" aria-pressed="false">Wall 4</button>
+            <button type="button" class="orientation-tab" data-orientation="ceiling" aria-pressed="false">Ceiling</button>
+            <button type="button" class="orientation-tab orientation-action" id="viewSelectedWall" aria-pressed="false">View Selected</button>
+          </div>
           <svg id="stage" width="900" height="640" viewBox="0 0 900 640">
             <!-- Room rectangle (scaled to fit) -->
             <g id="roomGroup">
@@ -331,6 +375,11 @@ const addWallBtn = document.getElementById('addWall');
 const addDoorBtn = document.getElementById('addDoor');
 const exportBtn = document.getElementById('export');
 const hud = document.getElementById('hud');
+const orientationTabsEl = document.getElementById('orientationTabs');
+const viewSelectedWallBtn = document.getElementById('viewSelectedWall');
+const orientationButtons = orientationTabsEl
+  ? Array.from(orientationTabsEl.querySelectorAll('[data-orientation]'))
+  : [];
 
 const roomRect = document.getElementById('roomRect');
 const originDot = document.getElementById('origin');
@@ -473,7 +522,8 @@ const state = {
   customWalls: [],
   doors: [],
   cables: [],
-  selectedSurface: { type: 'floor' }
+  selectedSurface: { type: 'floor' },
+  orientation: { type: 'floor' }
 };
 
 let hudTransient = null;
@@ -1045,6 +1095,87 @@ function listAllWalls() {
   return [...base, ...customs].map(enrichWallGeometry).filter(Boolean);
 }
 
+function parseOrientationKey(key) {
+  if (!key || typeof key !== 'string') {
+    return { type: 'floor' };
+  }
+  if (key === 'floor') return { type: 'floor' };
+  if (key === 'ceiling') return { type: 'ceiling' };
+  if (key.startsWith('wall:')) {
+    const ref = key.slice(5);
+    return { type: 'wall', ref };
+  }
+  return { type: 'floor' };
+}
+
+function orientationKeyFromState(orientation) {
+  if (!orientation || typeof orientation !== 'object') return 'floor';
+  if (orientation.type === 'floor') return 'floor';
+  if (orientation.type === 'ceiling') return 'ceiling';
+  if (orientation.type === 'wall') {
+    const ref = orientation.ref || '';
+    return ref ? `wall:${ref}` : 'wall';
+  }
+  return 'floor';
+}
+
+function describeOrientation(orientation) {
+  if (!orientation || typeof orientation !== 'object') {
+    return 'Viewing Floor Plan';
+  }
+  if (orientation.type === 'floor') {
+    return 'Viewing Floor Plan';
+  }
+  if (orientation.type === 'ceiling') {
+    return 'Viewing Ceiling Plan';
+  }
+  if (orientation.type === 'wall') {
+    const geom = getWallGeometry(orientation.ref);
+    if (geom) {
+      return `Viewing ${geom.label}`;
+    }
+    return 'Viewing Wall Elevation';
+  }
+  return 'Viewing Floor Plan';
+}
+
+function updateOrientationActiveState() {
+  const activeKey = orientationKeyFromState(state.orientation);
+  if (Array.isArray(orientationButtons) && orientationButtons.length > 0) {
+    orientationButtons.forEach(btn => {
+      const key = btn.dataset.orientation;
+      const isActive = key === activeKey;
+      btn.dataset.active = isActive ? 'true' : 'false';
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+  if (viewSelectedWallBtn) {
+    const isCustomWall = state.orientation?.type === 'wall'
+      && state.orientation?.ref
+      && !/^base:(?:1|2|3|4)$/.test(state.orientation.ref);
+    viewSelectedWallBtn.dataset.active = isCustomWall ? 'true' : 'false';
+    viewSelectedWallBtn.setAttribute('aria-pressed', isCustomWall ? 'true' : 'false');
+    const baseLabel = 'View Selected';
+    if (isCustomWall) {
+      const geom = getWallGeometry(state.orientation.ref);
+      const label = geom ? geom.label : 'Custom Wall';
+      viewSelectedWallBtn.textContent = `${baseLabel} (${label})`;
+    } else {
+      viewSelectedWallBtn.textContent = baseLabel;
+    }
+  }
+}
+
+function setOrientation(key, { announce = false } = {}) {
+  state.orientation = parseOrientationKey(key);
+  updateOrientationActiveState();
+  if (announce && hud) {
+    const message = describeOrientation(state.orientation);
+    hud.textContent = message;
+    hudTransient = message;
+  }
+}
+
 function pointAlongWall(geom, offset) {
   const dist = clamp(offset, 0, geom.length);
   return {
@@ -1114,6 +1245,7 @@ function setMode(mode) {
   roomTypeSel.value = mode;
   if (mode === 'basic') {
     state.selectedSurface = { type: 'floor' };
+    setOrientation('floor');
   }
   if (mode !== 'custom') {
     drawWallState = null;
@@ -1196,6 +1328,7 @@ function render() {
   renderWallItems();
   renderFloorItems();
   renderSelection();
+  updateOrientationActiveState();
   hud.textContent = hudTransient || defaultHudMessage();
   hudTransient = null;
   maybePersistLayout();
@@ -1876,6 +2009,37 @@ exportBtn.addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+orientationButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.orientation;
+    if (!key) return;
+    setOrientation(key, { announce: true });
+  });
+});
+
+if (viewSelectedWallBtn) {
+  viewSelectedWallBtn.addEventListener('click', () => {
+    let wallRef = wallSel && wallSel.value;
+    if (!wallRef) {
+      if (state.selectedSurface?.type === 'wall') {
+        wallRef = state.selectedSurface.ref;
+      } else if (state.selectedSurface?.type === 'wallItem') {
+        const wallItem = state.wallItems.find(w => w.id === state.selectedSurface.id);
+        wallRef = wallItem ? wallItem.wall : null;
+      } else if (state.selectedSurface?.type === 'door') {
+        const door = state.doors.find(d => d.id === state.selectedSurface.id);
+        wallRef = door ? door.wall : null;
+      }
+    }
+    if (!wallRef) {
+      showHud('Select a wall from the dropdown or canvas to view.');
+      return;
+    }
+    const key = wallRef.startsWith('wall:') ? wallRef : `wall:${wallRef}`;
+    setOrientation(key, { announce: true });
+  });
+}
 
 roomTypeSel.addEventListener('change', () => {
   setMode(roomTypeSel.value);

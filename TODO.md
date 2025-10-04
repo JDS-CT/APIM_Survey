@@ -23,7 +23,11 @@ Prototypes should target draggable Bézier splines and, if feasible, a physics-b
 ✅ [p2] Adjust the wall-door overlap so the door remains visible when placed by thickening the door mesh and/or cutting a doorway aperture to eliminate render flicker from coplanar faces. Implement dynamic wall subtraction if feasible; otherwise, keep the thicker asset fallback.
 ✅ [p2] Reposition or resize the wall socket and feedthrough assets so they remain visible in both wall and FPV views, verifying thickness against wall depth and updating 3D rendering logic if needed.
 ✅ [p2] Ensure wall port meshes (including gas, power, and feedthrough variants) appear in the FPV view by confirming they load into the Three.js scene and adjusting materials or render order to prevent occlusion.
-🔲 [p2] Add tabbed orientation controls above the 2D viewer for Floor (default), Walls 1-4, Ceiling, and a "View Selected" action that leverages the existing dropdown for custom walls.
+✅ [p2] Add tabbed orientation controls above the 2D viewer for Floor (default), Walls 1-4, Ceiling, and a "View Selected" action that leverages the existing dropdown for custom walls.
+  - [x] Identify the stage panel markup and determine where the orientation controls should live for best layout.
+  - [x] Implement the tabbed control markup/styling with buttons for Floor, Walls 1-4, Ceiling, and View Selected.
+  - [x] Connect the tab interactions to update orientation state and reuse the existing wall dropdown for selecting custom walls when "View Selected" is chosen.
+  - [x] Ensure the Floor tab is active by default and expose hooks for follow-up work to sync canvas projection.
 🔲 [p2] Synchronize the new orientation tabs with existing 2D layout state so switching tabs updates the canvas projection without losing selection or cable editing context.
 🔲 [p2] Add thermostat assets for wall and ceiling contexts, including metadata, thumbnails, and distinct dangling sensor meshes when placed on ceilings.
 🔲 [p2] Define new catalog entries for chiller, N2 bottle, wall air line barb, bottled air line, and resizable tables, including required metadata (dimensions, connection points, thumbnails).

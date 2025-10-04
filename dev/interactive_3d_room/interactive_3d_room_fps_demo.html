@@ -329,6 +329,11 @@
     const DEFAULT_WALL_THICKNESS_MM = 200;
     const DOOR_DEFAULT_THICKNESS_MM = 80;
     const DOOR_HEIGHT_MM = 2100;
+    const DOOR_VISUAL_EXTRA_THICKNESS_MM = 20;
+    const DOOR_INTERIOR_CLEARANCE_MM = 8;
+    const WALL_ITEM_DEFAULT_SIZE_MM = { width: 400, height: 600, depth: 120 };
+    const WALL_ITEM_EXTRA_DEPTH_MM = 10;
+    const WALL_ITEM_SURFACE_CLEARANCE_MM = 6;
 
     const ASSET_FLOOR_ITEM_TYPE = 'gltfAsset';
     const SAMPLE_ASSET_REF = 'sample/dozenSidedStack';
@@ -351,6 +356,8 @@
         label: 'Wall Socket',
         assetKey: 'wall_socket',
         defaultDepthMm: 300,
+        color: 0xf9a825,
+        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
             id: 'wall_outlet_duplex',
@@ -366,6 +373,8 @@
         label: 'Gas Socket',
         assetKey: 'wall_gas_socket',
         defaultDepthMm: 300,
+        color: 0x22c55e,
+        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
             id: 'wall_gas_outlet',
@@ -381,6 +390,8 @@
         label: 'Feedthrough',
         assetKey: 'wall_feedthrough',
         defaultDepthMm: 200,
+        color: 0x0ea5e9,
+        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
             id: 'feedthrough_room',
@@ -430,18 +441,25 @@
     const DEFAULT_ROOM_PRESET = () => ({
       room: { W: 6000, L: 8000 },
       floor_items: [
-        { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
-        { type: 'table', x: 3800, y: 5200, rotation: 0 },
-        { type: 'pump', x: 4200, y: 3400, rotation: 0 },
-        { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+        { id: 'floor_1', type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+        { id: 'floor_2', type: 'table', x: 3800, y: 5200, rotation: 0 },
+        { id: 'floor_3', type: 'pump', x: 4200, y: 3400, rotation: 0 },
+        { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
       ],
       wall_items: [
-        { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
-        { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+        { id: 'socket_5', type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+        { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 }
       ],
       custom_walls: [],
       doors: [],
-      cables: []
+      cables: [
+        {
+          id: 'cable_7',
+          cableType: 'power',
+          source: { kind: 'floor', assetId: 'floor_1', socketId: 'microscope_power' },
+          target: { kind: 'wall', assetId: 'socket_5', socketId: 'wall_outlet_duplex' }
+        }
+      ]
     });
 
     const layout = {
@@ -528,6 +546,7 @@
     const floorGroup = new THREE.Group();
     const wallGroup = new THREE.Group();
     const doorGroup = new THREE.Group();
+    const wallItemGroup = new THREE.Group();
     const itemGroup = new THREE.Group();
     const cableGroup = new THREE.Group();
     const assetAnchor = new THREE.Group();
@@ -536,6 +555,7 @@
     scene.add(floorGroup);
     scene.add(wallGroup);
     scene.add(doorGroup);
+    scene.add(wallItemGroup);
     scene.add(itemGroup);
     scene.add(cableGroup);
     scene.add(assetAnchor);
@@ -1265,6 +1285,7 @@
           return;
         }
       }
+      buildWallItems();
       buildCables();
     }
 
@@ -1672,21 +1693,73 @@
         if (!geom) return;
         const widthMm = toNumber(door.width, 900);
         const width = mm2m(widthMm);
-        const thicknessMm = toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM);
+        const wallThicknessMm = geom.thickness || DEFAULT_WALL_THICKNESS_MM;
+        const baseThicknessMm = Math.max(toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM), wallThicknessMm);
+        const thicknessMm = baseThicknessMm + DOOR_VISUAL_EXTRA_THICKNESS_MM;
         const thickness = mm2m(thicknessMm);
         const box = new THREE.BoxGeometry(width, height, thickness);
         const mesh = new THREE.Mesh(box, mat.clone());
         const centerOffset = toNumber(door.offset, 0) + widthMm / 2;
         const centerMm = pointAlongWall(geom, centerOffset);
+        const clearance = Math.min(DOOR_INTERIOR_CLEARANCE_MM, wallThicknessMm / 4);
+        const centerDistance = thicknessMm / 2 - clearance;
         const offsetMm = {
-          x: centerMm.x + geom.normal.x * (thicknessMm / 2),
-          y: centerMm.y + geom.normal.y * (thicknessMm / 2)
+          x: centerMm.x + geom.normal.x * centerDistance,
+          y: centerMm.y + geom.normal.y * centerDistance
         };
         const world = mmPointToWorld(offsetMm.x, offsetMm.y);
         mesh.position.set(world.x, height / 2, world.z);
         const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
         mesh.rotation.y = -angle;
         doorGroup.add(mesh);
+      });
+    }
+
+    function buildWallItems() {
+      clearGroup(wallItemGroup);
+      const items = Array.isArray(layout.wall_items) ? layout.wall_items : [];
+      const assetsCatalog = cableCatalogData && cableCatalogData.assets ? cableCatalogData.assets : {};
+      items.forEach(item => {
+        const geom = getWallGeometry(item.wall);
+        if (!geom) return;
+        const type = typeof item.type === 'string' ? item.type : 'socket';
+        const meta = WALL_ITEM_META[type] || WALL_ITEM_META.socket;
+        const assetKey = meta.assetKey || 'wall_socket';
+        const assetDef = assetsCatalog[assetKey] || {};
+        const bbox = assetDef.boundingBox_mm || meta.sizeMm || WALL_ITEM_DEFAULT_SIZE_MM;
+        const widthMm = Math.max(toNumber(item.w, bbox.w || WALL_ITEM_DEFAULT_SIZE_MM.width), 40);
+        const heightSource = bbox.h || WALL_ITEM_DEFAULT_SIZE_MM.height;
+        const heightMm = Math.max(toNumber(item.height_mm, heightSource), 40);
+        const baseDepth = bbox.l || WALL_ITEM_DEFAULT_SIZE_MM.depth;
+        const rawDepth = toNumber(item.h, meta.defaultDepthMm !== undefined ? meta.defaultDepthMm : baseDepth);
+        const depthMagnitudeMm = Math.max(Math.abs(rawDepth), 30);
+        const direction = rawDepth < 0 ? -1 : 1;
+        const extrudeMm = depthMagnitudeMm + WALL_ITEM_EXTRA_DEPTH_MM;
+        const clearance = Math.min(WALL_ITEM_SURFACE_CLEARANCE_MM, depthMagnitudeMm / 2);
+        const centerDistance = direction === 1
+          ? extrudeMm / 2 - clearance
+          : -(extrudeMm / 2 - clearance);
+        const offset = clamp(toNumber(item.s, 0), 0, geom.length);
+        const baseMm = pointAlongWall(geom, offset);
+        const centerMm = {
+          x: baseMm.x + geom.normal.x * centerDistance,
+          y: baseMm.y + geom.normal.y * centerDistance
+        };
+        const world = mmPointToWorld(centerMm.x, centerMm.y);
+        const width = mm2m(widthMm);
+        const height = mm2m(heightMm);
+        const depth = mm2m(extrudeMm);
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({
+          color: meta.color || 0xf9a825,
+          roughness: 0.45,
+          metalness: 0.12
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(world.x, mm2m(heightMm / 2), world.z);
+        mesh.rotation.y = -Math.atan2(geom.tangent.y, geom.tangent.x);
+        mesh.userData.wallItemId = item.id;
+        wallItemGroup.add(mesh);
       });
     }
 
@@ -1727,6 +1800,7 @@
       buildFloorAndBounds();
       buildWalls();
       buildDoors();
+      buildWallItems();
       buildItems();
       void refreshCableMeshes();
       repositionAssetIfNeeded();
@@ -2246,7 +2320,7 @@
       setAssetStatus('Loading sample GLTF asset…', 'info');
       return new Promise((resolve, reject) => {
         loader.load(
-          './assets/dozenSidedStack-Body.gltf',
+          './assets/dozenSidedStack-Body.glb',
           gltf => {
             const root = gltf.scene || (Array.isArray(gltf.scenes) ? gltf.scenes[0] : null);
             if (!root) {

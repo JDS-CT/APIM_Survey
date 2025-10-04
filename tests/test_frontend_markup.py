@@ -43,7 +43,7 @@ def test_fps_viewer_handles_pointer_lock_state() -> None:
     assert 'id="load-gltf"' in html
     assert 'id="resetAssetView"' in html
     assert "../shared/vendor/three/GLTFLoader.js" in html
-    assert "./assets/dozenSidedStack-Body.gltf" in html
+    assert "./assets/dozenSidedStack-Body.glb" in html
 
 
 def test_fps_viewer_supports_hand_mode_and_vertical_translation() -> None:

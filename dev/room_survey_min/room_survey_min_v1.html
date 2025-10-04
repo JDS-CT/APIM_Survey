@@ -429,14 +429,22 @@ const WALL_ITEM_DEFS = {
 const DEFAULT_ROOM_PRESET = () => ({
   room: { W: 6000, L: 8000 },
   floor_items: [
-    { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
-    { type: 'table', x: 3800, y: 5200, rotation: 0 },
-    { type: 'pump', x: 4200, y: 3400, rotation: 0 },
-    { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+    { id: 'floor_1', type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+    { id: 'floor_2', type: 'table', x: 3800, y: 5200, rotation: 0 },
+    { id: 'floor_3', type: 'pump', x: 4200, y: 3400, rotation: 0 },
+    { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
   ],
   wall_items: [
-    { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
-    { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+    { id: 'socket_5', type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+    { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+  ],
+  cables: [
+    {
+      id: 'cable_7',
+      cableType: 'power',
+      source: { kind: 'floor', assetId: 'floor_1', socketId: 'microscope_power' },
+      target: { kind: 'wall', assetId: 'socket_5', socketId: 'wall_outlet_duplex' }
+    }
   ]
 });
 
@@ -464,6 +472,7 @@ const state = {
   wallItems: [],
   customWalls: [],
   doors: [],
+  cables: [],
   selectedSurface: { type: 'floor' }
 };
 
@@ -488,33 +497,30 @@ function applyDefaultPreset() {
   const preset = DEFAULT_ROOM_PRESET();
   state.Wmm = preset.room.W;
   state.Lmm = preset.room.L;
-  state.floorItems = preset.floor_items.map(item => {
-    const def = FLOOR_ITEM_DEFS[item.type] || FLOOR_ITEM_DEFS.floorBox;
-    return {
-      id: genId('floor'),
-      type: item.type,
-      x: snapValue(item.x),
-      y: snapValue(item.y),
-      w: item.w || def.w,
-      l: item.l || def.l,
-      rotation: item.rotation || 0
-    };
-  });
-  state.wallItems = preset.wall_items.map(item => {
-    const type = item.type || 'socket';
-    const def = WALL_ITEM_DEFS[type] || WALL_ITEM_DEFS.socket;
-    return {
-      id: genId(def.idPrefix || 'wallItem'),
-      ...item,
-      type
-    };
-  });
+  state.floorItems = (preset.floor_items || [])
+    .map(item => {
+      const normalized = normalizeFloorItemFromLayout(item);
+      if (!normalized) return null;
+      return {
+        ...normalized,
+        x: snapValue(normalized.x),
+        y: snapValue(normalized.y)
+      };
+    })
+    .filter(Boolean);
+  state.wallItems = (preset.wall_items || [])
+    .map(item => normalizeWallItemFromLayout(item))
+    .filter(Boolean);
   state.customWalls = [];
   state.doors = [];
+  state.cables = (preset.cables || [])
+    .map(entry => normalizeCableFromLayout(entry))
+    .filter(Boolean);
   state.selectedSurface = { type: 'floor' };
   Winput.value = state.Wmm;
   Linput.value = state.Lmm;
   snapInput.value = state.snap;
+  syncIdCounterFromLayout();
 }
 
 
@@ -780,7 +786,8 @@ function syncIdCounterFromLayout() {
     ...state.floorItems.map(it => it.id),
     ...state.wallItems.map(it => it.id),
     ...state.customWalls.map(it => it.id),
-    ...state.doors.map(it => it.id)
+    ...state.doors.map(it => it.id),
+    ...(Array.isArray(state.cables) ? state.cables.map(it => it.id) : [])
   ];
   ids.forEach(id => {
     const match = id ? String(id).match(/_(\d+)$/) : null;
@@ -837,6 +844,7 @@ function applyLayout(raw, { skipPersist = false, message } = {}) {
     state.doors = Array.isArray(layout.doors)
       ? layout.doors.map(normalizeDoorFromLayout).filter(Boolean)
       : [];
+    state.cables = normalizeCableArray(layout);
 
     syncIdCounterFromLayout();
     recomputeScale();

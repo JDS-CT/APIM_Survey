@@ -16,5 +16,15 @@
   ],
   "custom_walls": [],
   "doors": [],
+  "cables": [
+    {
+      "id": "cable_7",
+      "cableType": "power",
+      "source": { "kind": "floor", "assetId": "floor_1", "socketId": "microscope_power" },
+      "target": { "kind": "wall", "assetId": "socket_5", "socketId": "wall_outlet_duplex" },
+      "controlPoints": [],
+      "bendPoints": []
+    }
+  ],
   "selected_surface": { "type": "floor" }
 }

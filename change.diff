@@ -1,0 +1,1265 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 1017e16d8abb0cd24144486acce78aefda992dbb..0db2831e6faba4fc3eeb2cad99ceb03aec9c8e81 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,27 +1,33 @@
+ # Changelog
+ 
++## 2025-10-05T08:15:00Z
++- fix: complete step [p1] Restore the cable type dropdown by restructuring the shared default catalog so fallback metadata loads before the fetch completes.
++- feat: complete step [p1] Seed the default survey and FPV layouts with a sample microscope power cable for instant visualization and persistence regression coverage.
++- fix: complete step [p2] Thicken FPV door meshes and offset them from the wall plane to eliminate z-fighting while keeping both sides visible.
++- feat: complete step [p2] Render wall sockets and feedthroughs in FPV using catalog-derived dimensions, colors, and depth offsets so ports appear in the 3D view.
++- chore: complete step [p3] Switch the sample asset loader to a single-file GLB and drop the multi-file GLTF bundle for simpler asset distribution.
+ ## 2025-10-05T04:30:00Z
+ - fix: complete step [p2] Restore FPV cable rendering by defining shared sample density constants and honoring wall socket offset directions.
+ - feat: complete step [p2] Add catalog metadata and UI affordances for wall-mounted gas sockets and dual-sided feedthroughs across survey and FPV views.
+ - fix: complete step [p2] Surface wall connection anchors above equipment meshes so sockets remain clickable when placing cables.
+ - test: extend frontend markup coverage for the new wall item options and FPV cable sampling guard.
+ 
+ ## 2025-10-05T00:00:00Z
+ - feat: complete step [p1] Ship a shared cable catalog default script and fallbacks so cable type dropdowns populate even when the external JSON fails to load.
+ - feat: complete step [p1] Teach both survey and FPV views to reuse the shared defaults for color-coded cable rendering across power, air, N2, ground, vacuum, water, and Ethernet lines.
+ - test: extend frontend markup coverage to assert the shared cable defaults are referenced by both experiences.
+ 
+ ## 2025-10-03T21:50:07Z
+ - feat: Implemented cable bend insertion/removal and draggable bend handles in the 2D survey so multi-segment Bézier routes can be authored.
+ - feat: Taught the FPV demo to honor persisted bend points by sampling chained cubic segments when generating tube geometry and lengths.
+ - test: Added frontend markup assertions covering the new cable bend controls and handler functions.
+ 
+ ## 2025-10-03T21:39:02Z
+ - feat: Stand up a shared cable catalog and extend layout persistence so cables serialize with endpoints, bend points, and status.
+ - feat: Add 2D survey socket overlays with Bézier cable creation, draggable handles, and length validation UI.
+ - feat: Render FPV cable tubes in Three.js using shared metadata and update statuses after layout changes.
+ - test: Extend frontend markup coverage to assert cable catalog wiring and layout snapshot fields for cables.
+ 
+ ## 2025-10-03T18:57:17Z
+ - docs: complete step [p1] Document curved cable connection prototypes covering Bézier and physics-driven approaches with bounding-box socket registration.
+ - docs: complete step [p1] Outline cable metadata schema updates so sockets declare allowed cable types for validation across survey and FPV views.
+diff --git a/PROBLEMS.md b/PROBLEMS.md
+index 89c4a8cae03258b28d3a50003018d067587950e4..01a44e050901f94be808feb83d925fdf6838de2f 100644
+--- a/PROBLEMS.md
++++ b/PROBLEMS.md
+@@ -1,5 +1,6 @@
+ # Problem → Solution Log
+ - 2025-10-02: `pytest -q --maxfail=1 --cov=.` failed because `pytest-cov` is not installed in the environment. Reran the suite without the coverage flag once tests were configured.
+ - 2025-10-02: `pip install flask` was blocked by the environment proxy (403). Replaced the Flask dependency with a standard-library HTTP server implementation instead.
+ - 2025-10-03: `pytest -q --maxfail=1 --cov=.` still fails because the `pytest-cov` plugin is not installed in the environment. Reran the suite without the coverage flag.
+ - 2025-10-03: `black --check .` flagged `tests/test_frontend_markup.py` formatting drift. Ran `black tests/test_frontend_markup.py` to restore compliance before rerunning the check.
++- 2025-10-05: `pnpm test --run --reporter=dot`, `pnpm lint`, and `pnpm typecheck` failed because no package manifest is present at the repository root. Skipped pnpm-based checks since this prototype does not ship a Node workspace.
+diff --git a/TODO.md b/TODO.md
+index 3405e6f39c09f985767e8636a6bb2b97a212b302..805e2e3bc3efe24b4c8e85781f7d32242fe6a8d7 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -1,33 +1,40 @@
+ TEST -- using AGENTS.md file
+ # TODO
+ ✅ [p1] Remove the obsolete MWE viewer by deleting dev/test_objects/mwe_viewer.html and stripping all navigation links or tests that reference it.
+ ✅ [p1] Excise the broken orbit viewer references from marketing copy and persistence keys so only the 2D survey and FPV flows remain.
+ ✅ [p1] Persist placed GLTF assets across the 2D survey and FPV views by serializing placements to shared storage and restoring them when either view loads.
+ ✅ [p1] Draft two prototype approaches for connecting items with curved joints, including how to register connection points on bounding boxes.
+ Prototypes should target draggable Bézier splines and, if feasible, a physics-based cable simulation. Cables must connect by clicking endpoints and allow realistic movement with a max length limit (e.g., 10 ft / 3 m). Physics-based routing may bias cables to avoid objects, but manual bend points remain acceptable. Some machines can hold cables in service loops, so only max length is enforced.
+ ✅ [p1] Identify required metadata schema updates so cables can snap to defined connection sockets on each asset. No rotation/orientation data is required. Metadata should only define which cable types are valid for which machine types. The goal is simple layout validation, not CAD-level detail.
+ ✅ [p1] Stand up a shared cable catalog describing cable types, asset socket anchors, and default max lengths so both survey and FPV modes can reference identical metadata.
+ ✅ [p1] Extend the layout store, persistence helpers, and normalization logic to include a cables array with endpoints, control points, and cached length/status data.
+ ✅ [p1] Implement 2D survey affordances for sockets (hover highlights) and Bézier cable drawing/editing, including snapping control handles and persistence of bend points.
+ ✅ [p1] Render cable paths in the FPV demo via Three.js lines/tubes, reusing layout cables and mirroring color coding for cable types.
+ ✅ [p1] Add focused regression coverage asserting cable metadata availability and layout serialization fields so future refactors keep the feature intact.
+ ✅ [p2] Diagnose why cables fail to render in FPV view and update the Three.js scene graph so saved cables become visible.
+ ✅ [p2] Add a wall-mounted gas socket asset with metadata (type tags, cable compatibility, thumbnail) and expose it in the catalog.
+ ✅ [p2] Introduce a wall feedthrough asset that provides paired connection sockets on both sides of a wall and persists placement metadata.
+ ✅ [p2] Expose connection anchors on bulky equipment meshes so users can attach cables/lines without mesh occlusion (adjust anchor offsets or hit areas).
+- 🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
++✅ [p1] Fix the cables dropdown so cable metadata loads, options render, and selections persist without getting stuck on "Loading...".
++✅ [p1] Seed the default room layout with at least one example power cable connecting the microscope to a wall port so visualization remains testable even if UI affordances fail.
++🔲 [p2] Extend regression tests to cover importing a saved layout and switching between tabs without losing state.
+ 🔲 [p2] Add an automated check that first-person mode stops moving when no input is pressed.
+ 🔲 [p2] Backfill regression coverage for the new FPS module loader path or document why automated coverage is deferred.
+-🔲 [p2] Adjust the wall-door overlap so the door remains visible when placed (either by carving a doorway gap or thickening the door asset). If possible, implement dynamic wall subtraction that updates when the door is moved. Otherwise, fallback to thickened door assets.
+-🔲 [p2] Reposition or resize the wall socket asset so it is visible in the wall view; confirm desired thickness. Thicker socket meshes are acceptable. Sockets can protrude slightly since real sites vary (flush vs mounted tubes). Primary purpose is indicating utility placement for survey consistency.
++✅ [p2] Adjust the wall-door overlap so the door remains visible when placed by thickening the door mesh and/or cutting a doorway aperture to eliminate render flicker from coplanar faces. Implement dynamic wall subtraction if feasible; otherwise, keep the thicker asset fallback.
++✅ [p2] Reposition or resize the wall socket and feedthrough assets so they remain visible in both wall and FPV views, verifying thickness against wall depth and updating 3D rendering logic if needed.
++✅ [p2] Ensure wall port meshes (including gas, power, and feedthrough variants) appear in the FPV view by confirming they load into the Three.js scene and adjusting materials or render order to prevent occlusion.
++🔲 [p2] Add tabbed orientation controls above the 2D viewer for Floor (default), Walls 1-4, Ceiling, and a "View Selected" action that leverages the existing dropdown for custom walls.
++🔲 [p2] Synchronize the new orientation tabs with existing 2D layout state so switching tabs updates the canvas projection without losing selection or cable editing context.
++🔲 [p2] Add thermostat assets for wall and ceiling contexts, including metadata, thumbnails, and distinct dangling sensor meshes when placed on ceilings.
+ 🔲 [p2] Define new catalog entries for chiller, N2 bottle, wall air line barb, bottled air line, and resizable tables, including required metadata (dimensions, connection points, thumbnails).
+ ✅ [p1] Implement color-coded cable/line variants for power (black), air (white), N2 (green), ground (green/yellow stripe), vacuum (transparent white), water (blue), and Ethernet (yellow) lines. These should appear in both 2D and FPV views as real placed objects. Goal is realistic layout checking and annotating facility responsibilities when line lengths exceed provided equipment.
+ 🔲 [p3] Catalog reusable "glass light" theme tokens for other room survey prototypes and expand the shared theme library as new looks emerge.
+ 🔲 [p3] Evaluate additional camera input affordances (e.g., touch gestures and keyboard shortcuts) for the 3D first-person demo after the next round of feedback.
+ 🔲 [p3] Gate the FPS "Enter Walk Mode" button when pointer lock is unsupported and surface a toast to clarify the disabled state.
+ 🔲 [p3] Rename all UI copy and persistence keys from "FPS" to "FPV" across the site.
+ 🔲 [p3] Double the forward/backward walk speed in FPV mode so perspective traversal feels faster.
+ 🔲 [p3] Raise the FPV camera height (and related collision bounds) to approximate human eye level rather than dog-height perspective.
++✅ [p3] Evaluate migrating GLTF asset handling to prefer single-file GLB packages (e.g., resources/testObjects/dozenSidedStack/dozenSidedStack-Body.glb) and implement loading if parity is trivial; otherwise document blockers.
+ 🔲 [p4] Add optional keybindings (e.g., Z/C) to rotate selected objects around the X axis while retaining Q/E for Z-axis rotation. Rotation can snap to increments. Smooth analog control is not required—CAD tools handle high-fidelity adjustments later.
+-🔲 [p4] Export format is in such a way that OpenSCAD or FreeCAD may be able to render the finalized room.  
++🔲 [p4] Export format is in such a way that OpenSCAD or FreeCAD may be able to render the finalized room.
+ Evaluate feasibility of exporting layouts in a format that these CAD tools can interpret for further refinement.
+
+diff --git a/dev/interactive_3d_room/interactive_3d_room_fps_demo.html b/dev/interactive_3d_room/interactive_3d_room_fps_demo.html
+index 8f0258117f09bdb3107646b448981f7ef9467e20..b57dfa43e6ac7f76a0ffc211024c085f09759fa2 100644
+--- a/dev/interactive_3d_room/interactive_3d_room_fps_demo.html
++++ b/dev/interactive_3d_room/interactive_3d_room_fps_demo.html
+@@ -307,163 +307,181 @@
+           <p>Use <strong>WASD</strong> to move, <strong>mouse</strong> to look, <strong>Space</strong> to rise, and <strong>Shift</strong> to descend. Press <strong>Ctrl</strong> for Hand Mode when you want to adjust objects, and <strong>Alt</strong>+drag (while idle) to orbit.</p>
+         </div>
+       </div>
+     </section>
+   </main>
+ 
+   <script src="../shared/scripts/cable_catalog_defaults.js"></script>
+   <script type="module">
+     import * as THREE from '../shared/vendor/three/three.module.js';
+     import { PointerLockControls } from '../shared/vendor/three/PointerLockControls.js';
+     import { TransformControls } from '../shared/vendor/three/TransformControls.js';
+     import { GLTFLoader } from '../shared/vendor/three/GLTFLoader.js';
+ 
+     const mm2m = value => value / 1000;
+     const m2mm = value => value * 1000;
+     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+     const toNumber = (value, fallback = 0) => {
+       const num = Number(value);
+       return Number.isFinite(num) ? num : fallback;
+     };
+ 
+     const ROOM_HEIGHT_MM = 2438.4; // 8 ft
+     const DEFAULT_WALL_THICKNESS_MM = 200;
+     const DOOR_DEFAULT_THICKNESS_MM = 80;
+     const DOOR_HEIGHT_MM = 2100;
++    const DOOR_VISUAL_EXTRA_THICKNESS_MM = 20;
++    const DOOR_INTERIOR_CLEARANCE_MM = 8;
++    const WALL_ITEM_DEFAULT_SIZE_MM = { width: 400, height: 600, depth: 120 };
++    const WALL_ITEM_EXTRA_DEPTH_MM = 10;
++    const WALL_ITEM_SURFACE_CLEARANCE_MM = 6;
+ 
+     const ASSET_FLOOR_ITEM_TYPE = 'gltfAsset';
+     const SAMPLE_ASSET_REF = 'sample/dozenSidedStack';
+     const SAMPLE_ASSET_ID = 'asset_sample';
+ 
+     const FLOOR_ITEM_META = {
+       floorBox: { label: 'Floor Box', wmm: 600, lmm: 600, color: 0x2e6fba, height: 0.5 },
+       microscope: { label: 'Microscope', wmm: 2200, lmm: 1800, color: 0x8c5dd8, height: 2.0 },
+       table: { label: 'Table', wmm: 1800, lmm: 900, color: 0x3956b5, height: 0.9 },
+       pump: { label: 'Pump', wmm: 1200, lmm: 600, color: 0xeb7127, height: 0.8 },
+       [ASSET_FLOOR_ITEM_TYPE]: { label: 'GLTF Asset', wmm: 2000, lmm: 2000, color: 0x8b5cf6, height: 0.2 }
+     };
+ 
+     const ALL_CATALOG_TYPES = window.DEFAULT_CABLE_CATALOG && window.DEFAULT_CABLE_CATALOG.cableTypes
+       ? Object.keys(window.DEFAULT_CABLE_CATALOG.cableTypes)
+       : ['power', 'ground', 'air', 'n2', 'vacuum', 'water', 'ethernet'];
+ 
+     const WALL_ITEM_META = {
+       socket: {
+         label: 'Wall Socket',
+         assetKey: 'wall_socket',
+         defaultDepthMm: 300,
++        color: 0xf9a825,
++        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
+         fallbackSockets: [
+           {
+             id: 'wall_outlet_duplex',
+             label: 'Duplex Outlet',
+             anchor: { u: 0.5, v: 0.5, w: 0.5 },
+             allowedCableTypes: ['power', 'ground'],
+             surface: 'wall',
+             offsetDirection: 1
+           }
+         ]
+       },
+       gas_socket: {
+         label: 'Gas Socket',
+         assetKey: 'wall_gas_socket',
+         defaultDepthMm: 300,
++        color: 0x22c55e,
++        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
+         fallbackSockets: [
+           {
+             id: 'wall_gas_outlet',
+             label: 'Gas Outlet',
+             anchor: { u: 0.5, v: 0.5, w: 0.5 },
+             allowedCableTypes: ['air', 'n2', 'vacuum'],
+             surface: 'wall',
+             offsetDirection: 1
+           }
+         ]
+       },
+       feedthrough: {
+         label: 'Feedthrough',
+         assetKey: 'wall_feedthrough',
+         defaultDepthMm: 200,
++        color: 0x0ea5e9,
++        sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
+         fallbackSockets: [
+           {
+             id: 'feedthrough_room',
+             label: 'Feedthrough (Room Side)',
+             anchor: { u: 0.5, v: 0.5, w: 0.5 },
+             allowedCableTypes: ALL_CATALOG_TYPES,
+             surface: 'wall',
+             offsetDirection: 1
+           },
+           {
+             id: 'feedthrough_service',
+             label: 'Feedthrough (Service Side)',
+             anchor: { u: 0.5, v: 0.5, w: 0.5 },
+             allowedCableTypes: ALL_CATALOG_TYPES,
+             surface: 'wall',
+             offsetDirection: -1
+           }
+         ]
+       }
+     };
+ 
+     const CABLE_CATALOG_URL = '../resources/layout_samples/catalog.json';
+     const FALLBACK_CABLE_COLORS = (function () {
+       if (!window.DEFAULT_CABLE_CATALOG || !window.DEFAULT_CABLE_CATALOG.cableTypes) {
+         return {};
+       }
+       return Object.fromEntries(
+         Object.entries(window.DEFAULT_CABLE_CATALOG.cableTypes).map(([key, def]) => [
+           key,
+           def && def.color ? def.color : '#94a3b8'
+         ])
+       );
+     })();
+     const DEFAULT_CABLE_RADIUS_M = 0.025;
+     const CABLE_SAMPLE_SEGMENTS = 48;
+ 
+     const HAND_MODE_TOGGLE_KEY = 'Control';
+     const HAND_MODE_ROTATE_STEP = THREE.MathUtils.degToRad(5);
+     const WALK_OVERLAY_AUTO_HIDE_MS = 1800;
+     const MIN_TRANSLATION_SNAP = 0.01;
+     const MAX_TRANSLATION_SNAP = 0.5;
+     const DEFAULT_TRANSLATION_SNAP = 0.05;
+     let translationSnap = DEFAULT_TRANSLATION_SNAP;
+     let handModeTranslateStep = DEFAULT_TRANSLATION_SNAP;
+     let handModeVerticalStep = DEFAULT_TRANSLATION_SNAP;
+ 
+     const DEFAULT_ROOM_PRESET = () => ({
+       room: { W: 6000, L: 8000 },
+       floor_items: [
+-        { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+-        { type: 'table', x: 3800, y: 5200, rotation: 0 },
+-        { type: 'pump', x: 4200, y: 3400, rotation: 0 },
+-        { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
++        { id: 'floor_1', type: 'microscope', x: 2200, y: 5200, rotation: 0 },
++        { id: 'floor_2', type: 'table', x: 3800, y: 5200, rotation: 0 },
++        { id: 'floor_3', type: 'pump', x: 4200, y: 3400, rotation: 0 },
++        { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+       ],
+       wall_items: [
+-        { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+-        { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
++        { id: 'socket_5', type: 'socket', wall: 'base:1', s: 1500, h: 300 },
++        { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+       ],
+       custom_walls: [],
+       doors: [],
+-      cables: []
++      cables: [
++        {
++          id: 'cable_7',
++          cableType: 'power',
++          source: { kind: 'floor', assetId: 'floor_1', socketId: 'microscope_power' },
++          target: { kind: 'wall', assetId: 'socket_5', socketId: 'wall_outlet_duplex' }
++        }
++      ]
+     });
+ 
+     const layout = {
+       room: { Wmm: 6000, Lmm: 8000 },
+       floor_items: [],
+       wall_items: [],
+       custom_walls: [],
+       doors: [],
+       cables: []
+     };
+ 
+     const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';
+ 
+     const rendererHost = document.getElementById('rendererHost');
+     const walkOverlay = document.getElementById('walkOverlay');
+     const enterWalkBtn = document.getElementById('enter-walk');
+     const resetWalkBtn = document.getElementById('resetWalk');
+     const layoutImport = document.getElementById('layoutImport');
+     const resetLayoutBtn = document.getElementById('resetLayout');
+     const loadGltfBtn = document.getElementById('load-gltf');
+     const focusAssetBtn = document.getElementById('focusAsset');
+     const resetAssetViewBtn = document.getElementById('resetAssetView');
+     const assetStatus = document.getElementById('assetStatus');
+     const roomInfo = document.getElementById('roomInfo');
+     const walkStatus = document.getElementById('walkStatus');
+@@ -506,58 +524,60 @@
+     renderer.shadowMap.enabled = false;
+     renderer.setClearColor(scene.background);
+     rendererHost.appendChild(renderer.domElement);
+     renderer.domElement.tabIndex = -1;
+ 
+     const pointerControls = new PointerLockControls(camera, renderer.domElement);
+     const transformControls = new TransformControls(camera, renderer.domElement);
+     transformControls.setMode('translate');
+     transformControls.showY = true;
+     transformControls.setTranslationSnap(translationSnap);
+     scene.add(transformControls);
+     scene.add(pointerControls.getObject());
+ 
+     const ambient = new THREE.AmbientLight(0xf2f5ff, 0.8);
+     scene.add(ambient);
+     const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
+     keyLight.position.set(4, 6, 3);
+     scene.add(keyLight);
+     const fillLight = new THREE.DirectionalLight(0xcad6ff, 0.25);
+     fillLight.position.set(-5, 3, -2);
+     scene.add(fillLight);
+ 
+     const floorGroup = new THREE.Group();
+     const wallGroup = new THREE.Group();
+     const doorGroup = new THREE.Group();
++    const wallItemGroup = new THREE.Group();
+     const itemGroup = new THREE.Group();
+     const cableGroup = new THREE.Group();
+     const assetAnchor = new THREE.Group();
+     assetAnchor.visible = false;
+     assetAnchor.name = 'SampleAssetAnchor';
+     scene.add(floorGroup);
+     scene.add(wallGroup);
+     scene.add(doorGroup);
++    scene.add(wallItemGroup);
+     scene.add(itemGroup);
+     scene.add(cableGroup);
+     scene.add(assetAnchor);
+ 
+     const selectable = [];
+     const clock = new THREE.Clock();
+     const velocity = new THREE.Vector3();
+     const direction = new THREE.Vector3();
+     const moveState = { forward: false, back: false, left: false, right: false, up: false, down: false };
+     let walkBounds = { minX: -3, maxX: 3, minZ: -4, maxZ: 4, minY: 0.1, maxY: 3.5 };
+     let assetLoaded = false;
+     let assetSize = new THREE.Vector3(1, 1, 1);
+     let selectedObject = null;
+ 
+     function resetMovementState() {
+       moveState.forward = false;
+       moveState.back = false;
+       moveState.left = false;
+       moveState.right = false;
+       moveState.up = false;
+       moveState.down = false;
+       velocity.set(0, 0, 0);
+       direction.set(0, 0, 0);
+     }
+ 
+@@ -1243,50 +1263,51 @@
+           material.emissive = new THREE.Color(0xff6b6b);
+           material.emissiveIntensity = 0.35;
+         }
+         const mesh = new THREE.Mesh(geometry, material);
+         mesh.userData.cableId = cable.id;
+         cableGroup.add(mesh);
+         const lengthMm = computeCableLengthMm(points);
+         cable.length_mm = lengthMm;
+         const meta = cableCatalogData && cableCatalogData.cableTypes ? cableCatalogData.cableTypes[cable.cableType] : null;
+         const maxLength = meta && meta.maxLength_mm ? meta.maxLength_mm : 3048;
+         cable.status = lengthMm > maxLength ? 'over_limit' : 'within_limit';
+         next.push(cable);
+       });
+       layout.cables = next;
+     }
+ 
+     async function refreshCableMeshes() {
+       if (!cableCatalogData) {
+         try {
+           await ensureCableCatalog();
+         } catch (err) {
+           console.error('Failed to load cable catalog', err);
+           return;
+         }
+       }
++      buildWallItems();
+       buildCables();
+     }
+ 
+     function coerceLayoutPayload(raw) {
+       if (!raw || typeof raw !== 'object') return null;
+       if (raw.layout && typeof raw.layout === 'object') return raw.layout;
+       return raw;
+     }
+ 
+     function parseLayoutText(rawText) {
+       if (typeof rawText !== 'string') {
+         throw new Error('layout-file-empty');
+       }
+       const sanitized = rawText
+         .replace(/^\uFEFF/, '')
+         .replace(/\u0000/g, '')
+         .trim();
+       if (!sanitized) {
+         throw new Error('layout-file-empty');
+       }
+       try {
+         return coerceLayoutPayload(JSON.parse(sanitized));
+       } catch (err) {
+         const error = new Error('layout-file-invalid');
+         error.cause = err;
+@@ -1650,105 +1671,158 @@
+         const length = mm2m(geom.length);
+         const box = new THREE.BoxGeometry(length, height, thickness);
+         const mesh = new THREE.Mesh(box, customMat.clone());
+         const centerMm = pointAlongWall(geom, geom.length / 2);
+         const offsetMm = {
+           x: centerMm.x + geom.normal.x * (geom.thickness / 2),
+           y: centerMm.y + geom.normal.y * (geom.thickness / 2)
+         };
+         const world = mmPointToWorld(offsetMm.x, offsetMm.y);
+         mesh.position.set(world.x, height / 2, world.z);
+         const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+         mesh.rotation.y = -angle;
+         wallGroup.add(mesh);
+       });
+     }
+ 
+     function buildDoors() {
+       clearGroup(doorGroup);
+       const height = mm2m(DOOR_HEIGHT_MM);
+       const mat = new THREE.MeshStandardMaterial({ color: 0x3b8d46, roughness: 0.4, metalness: 0.05 });
+       (layout.doors || []).forEach(door => {
+         const geom = getWallGeometry(door.wall);
+         if (!geom) return;
+         const widthMm = toNumber(door.width, 900);
+         const width = mm2m(widthMm);
+-        const thicknessMm = toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM);
++        const wallThicknessMm = geom.thickness || DEFAULT_WALL_THICKNESS_MM;
++        const baseThicknessMm = Math.max(toNumber(door.thickness, DOOR_DEFAULT_THICKNESS_MM), wallThicknessMm);
++        const thicknessMm = baseThicknessMm + DOOR_VISUAL_EXTRA_THICKNESS_MM;
+         const thickness = mm2m(thicknessMm);
+         const box = new THREE.BoxGeometry(width, height, thickness);
+         const mesh = new THREE.Mesh(box, mat.clone());
+         const centerOffset = toNumber(door.offset, 0) + widthMm / 2;
+         const centerMm = pointAlongWall(geom, centerOffset);
++        const clearance = Math.min(DOOR_INTERIOR_CLEARANCE_MM, wallThicknessMm / 4);
++        const centerDistance = thicknessMm / 2 - clearance;
+         const offsetMm = {
+-          x: centerMm.x + geom.normal.x * (thicknessMm / 2),
+-          y: centerMm.y + geom.normal.y * (thicknessMm / 2)
++          x: centerMm.x + geom.normal.x * centerDistance,
++          y: centerMm.y + geom.normal.y * centerDistance
+         };
+         const world = mmPointToWorld(offsetMm.x, offsetMm.y);
+         mesh.position.set(world.x, height / 2, world.z);
+         const angle = Math.atan2(geom.tangent.y, geom.tangent.x);
+         mesh.rotation.y = -angle;
+         doorGroup.add(mesh);
+       });
+     }
+ 
++    function buildWallItems() {
++      clearGroup(wallItemGroup);
++      const items = Array.isArray(layout.wall_items) ? layout.wall_items : [];
++      const assetsCatalog = cableCatalogData && cableCatalogData.assets ? cableCatalogData.assets : {};
++      items.forEach(item => {
++        const geom = getWallGeometry(item.wall);
++        if (!geom) return;
++        const type = typeof item.type === 'string' ? item.type : 'socket';
++        const meta = WALL_ITEM_META[type] || WALL_ITEM_META.socket;
++        const assetKey = meta.assetKey || 'wall_socket';
++        const assetDef = assetsCatalog[assetKey] || {};
++        const bbox = assetDef.boundingBox_mm || meta.sizeMm || WALL_ITEM_DEFAULT_SIZE_MM;
++        const widthMm = Math.max(toNumber(item.w, bbox.w || WALL_ITEM_DEFAULT_SIZE_MM.width), 40);
++        const heightSource = bbox.h || WALL_ITEM_DEFAULT_SIZE_MM.height;
++        const heightMm = Math.max(toNumber(item.height_mm, heightSource), 40);
++        const baseDepth = bbox.l || WALL_ITEM_DEFAULT_SIZE_MM.depth;
++        const rawDepth = toNumber(item.h, meta.defaultDepthMm !== undefined ? meta.defaultDepthMm : baseDepth);
++        const depthMagnitudeMm = Math.max(Math.abs(rawDepth), 30);
++        const direction = rawDepth < 0 ? -1 : 1;
++        const extrudeMm = depthMagnitudeMm + WALL_ITEM_EXTRA_DEPTH_MM;
++        const clearance = Math.min(WALL_ITEM_SURFACE_CLEARANCE_MM, depthMagnitudeMm / 2);
++        const centerDistance = direction === 1
++          ? extrudeMm / 2 - clearance
++          : -(extrudeMm / 2 - clearance);
++        const offset = clamp(toNumber(item.s, 0), 0, geom.length);
++        const baseMm = pointAlongWall(geom, offset);
++        const centerMm = {
++          x: baseMm.x + geom.normal.x * centerDistance,
++          y: baseMm.y + geom.normal.y * centerDistance
++        };
++        const world = mmPointToWorld(centerMm.x, centerMm.y);
++        const width = mm2m(widthMm);
++        const height = mm2m(heightMm);
++        const depth = mm2m(extrudeMm);
++        const geometry = new THREE.BoxGeometry(width, height, depth);
++        const material = new THREE.MeshStandardMaterial({
++          color: meta.color || 0xf9a825,
++          roughness: 0.45,
++          metalness: 0.12
++        });
++        const mesh = new THREE.Mesh(geometry, material);
++        mesh.position.set(world.x, mm2m(heightMm / 2), world.z);
++        mesh.rotation.y = -Math.atan2(geom.tangent.y, geom.tangent.x);
++        mesh.userData.wallItemId = item.id;
++        wallItemGroup.add(mesh);
++      });
++    }
++
+     function buildItems() {
+       clearGroup(itemGroup);
+       (layout.floor_items || []).forEach(item => {
+         if (item.type === ASSET_FLOOR_ITEM_TYPE) {
+           return;
+         }
+         const meta = FLOOR_ITEM_META[item.type] || FLOOR_ITEM_META.floorBox;
+         const w = mm2m(toNumber(item.w, meta.wmm));
+         const l = mm2m(toNumber(item.l, meta.lmm));
+         const h = meta.height !== undefined ? meta.height : 1.0;
+         const geometry = new THREE.BoxGeometry(w, h, l);
+         const material = new THREE.MeshStandardMaterial({ color: meta.color, roughness: 0.45, metalness: 0.1 });
+         const mesh = new THREE.Mesh(geometry, material);
+         const world = mmPointToWorld(toNumber(item.x, layout.room.Wmm / 2), toNumber(item.y, layout.room.Lmm / 2));
+         mesh.position.set(world.x, h / 2, world.z);
+         const rot = THREE.MathUtils.degToRad(toNumber(item.rotation, 0));
+         if (rot) mesh.rotation.y = -rot;
+         itemGroup.add(mesh);
+       });
+     }
+ 
+     function updateRoomInfo() {
+       const Wm = (layout.room.Wmm / 1000).toFixed(2);
+       const Lm = (layout.room.Lmm / 1000).toFixed(2);
+       const heightM = (ROOM_HEIGHT_MM / 1000).toFixed(2);
+       const customCount = layout.custom_walls && layout.custom_walls.length ? layout.custom_walls.length : 0;
+       const doorCount = layout.doors && layout.doors.length ? layout.doors.length : 0;
+       const itemCount = layout.floor_items && layout.floor_items.length ? layout.floor_items.length : 0;
+       roomInfo.innerHTML = `Room: <strong>${Wm}m × ${Lm}m</strong> &middot; Height ${heightM}m<br>` +
+         `${customCount} custom wall${customCount === 1 ? '' : 's'}, ${doorCount} door${doorCount === 1 ? '' : 's'}, ${itemCount} floor item${itemCount === 1 ? '' : 's'}`;
+     }
+ 
+     function applyLayout() {
+       ensureLayoutIds();
+       buildFloorAndBounds();
+       buildWalls();
+       buildDoors();
++      buildWallItems();
+       buildItems();
+       void refreshCableMeshes();
+       repositionAssetIfNeeded();
+       updateRoomInfo();
+       resetWalkPosition();
+       pointerControls.unlock();
+       resetMovementState();
+       updateWalkUi();
+     }
+ 
+     function resetWalkPosition() {
+       const cameraHolder = pointerControls.getObject();
+       setHandMode(false, { silent: true });
+       resetMovementState();
+       cameraHolder.position.set(walkBounds.minX + 0.6, 1.6, walkBounds.minZ + 1.2);
+       cameraHolder.rotation.set(0, 0, 0);
+       camera.position.set(0, 0, 0);
+       camera.rotation.set(0, 0, 0);
+       updateWalkUi();
+     }
+ 
+     function clampCamera() {
+       const pos = pointerControls.getObject().position;
+       pos.x = clamp(pos.x, walkBounds.minX, walkBounds.maxX);
+       pos.z = clamp(pos.z, walkBounds.minZ, walkBounds.maxZ);
+@@ -2224,51 +2298,51 @@
+     }
+ 
+     if (loadGltfBtn) {
+       loadGltfBtn.addEventListener('click', () => {
+         loadSampleAsset().catch(err => {
+           console.error('Failed to load sample GLTF asset', err);
+         });
+       });
+     }
+ 
+     initializeTranslationSnapControls();
+ 
+     const loader = new GLTFLoader();
+     setAssetStatus('No GLTF asset loaded. Click “Load Sample GLTF Asset” to import.', 'neutral');
+     updateAssetButtonsState();
+ 
+     function loadSampleAsset(options = {}) {
+       const { fromLayout = null, persistOptions = {} } = options;
+       if (!loadGltfBtn) {
+         return Promise.resolve(false);
+       }
+       loadGltfBtn.disabled = true;
+       setAssetStatus('Loading sample GLTF asset…', 'info');
+       return new Promise((resolve, reject) => {
+         loader.load(
+-          './assets/dozenSidedStack-Body.gltf',
++          './assets/dozenSidedStack-Body.glb',
+           gltf => {
+             const root = gltf.scene || (Array.isArray(gltf.scenes) ? gltf.scenes[0] : null);
+             if (!root) {
+               console.error('GLTF load succeeded but no scene graph was found.', gltf);
+               alert('Unable to load the sample GLTF scene. See console for details.');
+               loadGltfBtn.disabled = false;
+               setAssetStatus('GLTF load succeeded but no scene graph was found.', 'warn');
+               resolve(false);
+               return;
+             }
+ 
+             root.traverse(node => {
+               if (node.isMesh) {
+                 node.castShadow = false;
+                 node.receiveShadow = true;
+               }
+             });
+ 
+             const bbox = new THREE.Box3().setFromObject(root);
+             const center = new THREE.Vector3();
+             const size = new THREE.Vector3();
+             bbox.getCenter(center);
+             bbox.getSize(size);
+ 
+             const { scale, note } = deriveAssetScale(size);
+diff --git a/dev/room_survey_min/room_survey_min_v1.html b/dev/room_survey_min/room_survey_min_v1.html
+index 47316e9f83b9596988249befe2447804a4ee70b6..54c588137ee3f4d6596d09e6474c275908c04855 100644
+--- a/dev/room_survey_min/room_survey_min_v1.html
++++ b/dev/room_survey_min/room_survey_min_v1.html
+@@ -407,136 +407,142 @@ const WALL_ITEM_DEFS = {
+     depthDirections: [1, -1],
+     fallbackSockets: [
+       {
+         id: 'feedthrough_room',
+         label: 'Feedthrough (Room Side)',
+         anchor: { u: 0.5, v: 0.5, w: 0.5 },
+         allowedCableTypes: ALL_DEFAULT_CABLE_TYPES,
+         surface: 'wall',
+         offsetDirection: 1
+       },
+       {
+         id: 'feedthrough_service',
+         label: 'Feedthrough (Service Side)',
+         anchor: { u: 0.5, v: 0.5, w: 0.5 },
+         allowedCableTypes: ALL_DEFAULT_CABLE_TYPES,
+         surface: 'wall',
+         offsetDirection: -1
+       }
+     ]
+   }
+ };
+ 
+ const DEFAULT_ROOM_PRESET = () => ({
+   room: { W: 6000, L: 8000 },
+   floor_items: [
+-    { type: 'microscope', x: 2200, y: 5200, rotation: 0 },
+-    { type: 'table', x: 3800, y: 5200, rotation: 0 },
+-    { type: 'pump', x: 4200, y: 3400, rotation: 0 },
+-    { type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
++    { id: 'floor_1', type: 'microscope', x: 2200, y: 5200, rotation: 0 },
++    { id: 'floor_2', type: 'table', x: 3800, y: 5200, rotation: 0 },
++    { id: 'floor_3', type: 'pump', x: 4200, y: 3400, rotation: 0 },
++    { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+   ],
+   wall_items: [
+-    { type: 'socket', wall: 'base:1', s: 1500, h: 300 },
+-    { type: 'socket', wall: 'base:3', s: 4500, h: 300 }
++    { id: 'socket_5', type: 'socket', wall: 'base:1', s: 1500, h: 300 },
++    { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 }
++  ],
++  cables: [
++    {
++      id: 'cable_7',
++      cableType: 'power',
++      source: { kind: 'floor', assetId: 'floor_1', socketId: 'microscope_power' },
++      target: { kind: 'wall', assetId: 'socket_5', socketId: 'wall_outlet_duplex' }
++    }
+   ]
+ });
+ 
+ const BASE_WALL_THICKNESS = 200;
+ const DOOR_DEFAULT_WIDTH = 900;
+ const DOOR_DEFAULT_THICKNESS = 80;
+ 
+ let idCounter = 1;
+ let suppressPersist = false;
+ let pendingPersist = null;
+ let persistTimer = null;
+ let flushingPersist = false;
+ let lastPersistedSerialized = null;
+ 
+ function genId(prefix = 'id') { return `${prefix}_${idCounter++}`; }
+ 
+ const state = {
+   mode: 'basic',
+   Wmm: 6000,
+   Lmm: 8000,
+   scale: 1,
+   snap: 100,
+   imperial: false,
+   floorItems: [],
+   wallItems: [],
+   customWalls: [],
+   doors: [],
++  cables: [],
+   selectedSurface: { type: 'floor' }
+ };
+ 
+ let hudTransient = null;
+ let drawWallState = null;
+ function showHud(message) { hudTransient = message; }
+ 
+ function toNumber(value, fallback = 0) {
+   const num = Number(value);
+   return Number.isFinite(num) ? num : fallback;
+ }
+ 
+ function isEditingFormControl(el) {
+   if (!el) return false;
+   if (el.isContentEditable) return true;
+   const tag = el.tagName;
+   if (!tag) return false;
+   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+ }
+ 
+ function applyDefaultPreset() {
+   const preset = DEFAULT_ROOM_PRESET();
+   state.Wmm = preset.room.W;
+   state.Lmm = preset.room.L;
+-  state.floorItems = preset.floor_items.map(item => {
+-    const def = FLOOR_ITEM_DEFS[item.type] || FLOOR_ITEM_DEFS.floorBox;
+-    return {
+-      id: genId('floor'),
+-      type: item.type,
+-      x: snapValue(item.x),
+-      y: snapValue(item.y),
+-      w: item.w || def.w,
+-      l: item.l || def.l,
+-      rotation: item.rotation || 0
+-    };
+-  });
+-  state.wallItems = preset.wall_items.map(item => {
+-    const type = item.type || 'socket';
+-    const def = WALL_ITEM_DEFS[type] || WALL_ITEM_DEFS.socket;
+-    return {
+-      id: genId(def.idPrefix || 'wallItem'),
+-      ...item,
+-      type
+-    };
+-  });
++  state.floorItems = (preset.floor_items || [])
++    .map(item => {
++      const normalized = normalizeFloorItemFromLayout(item);
++      if (!normalized) return null;
++      return {
++        ...normalized,
++        x: snapValue(normalized.x),
++        y: snapValue(normalized.y)
++      };
++    })
++    .filter(Boolean);
++  state.wallItems = (preset.wall_items || [])
++    .map(item => normalizeWallItemFromLayout(item))
++    .filter(Boolean);
+   state.customWalls = [];
+   state.doors = [];
++  state.cables = (preset.cables || [])
++    .map(entry => normalizeCableFromLayout(entry))
++    .filter(Boolean);
+   state.selectedSurface = { type: 'floor' };
+   Winput.value = state.Wmm;
+   Linput.value = state.Lmm;
+   snapInput.value = state.snap;
++  syncIdCounterFromLayout();
+ }
+ 
+ 
+ function normalizeFloorItemFromLayout(item) {
+   if (!item || typeof item !== 'object') return null;
+   const type = item.type || 'floorBox';
+   const def = FLOOR_ITEM_DEFS[type] || FLOOR_ITEM_DEFS.floorBox;
+   const id = item.id !== undefined ? String(item.id) : genId('floor');
+   return {
+     id,
+     type,
+     x: toNumber(item.x, 0),
+     y: toNumber(item.y, 0),
+     w: toNumber(item.w ?? item.size ?? def.w, def.w),
+     l: toNumber(item.l ?? item.size ?? def.l, def.l),
+     rotation: toNumber(item.rotation, 0),
+     assetRef: typeof item.assetRef === 'string' ? item.assetRef : undefined,
+     elevation_mm: item.elevation_mm !== undefined ? toNumber(item.elevation_mm, 0) : undefined
+   };
+ }
+ 
+ function normalizeWallItemFromLayout(item) {
+   if (!item || typeof item !== 'object') return null;
+   const type = item.type || 'socket';
+   const def = WALL_ITEM_DEFS[type] || WALL_ITEM_DEFS.socket;
+@@ -758,51 +764,52 @@ async function flushPersistQueue() {
+       }
+       lastPersistedSerialized = current.serialized;
+     }
+   } finally {
+     flushingPersist = false;
+     if (pendingPersist && !persistTimer) {
+       persistTimer = setTimeout(() => {
+         persistTimer = null;
+         void flushPersistQueue();
+       }, LAYOUT_PERSIST_DELAY_MS);
+     }
+   }
+ }
+ 
+ function maybePersistLayout() {
+   if (suppressPersist) return;
+   const snapshot = snapshotLayout();
+   schedulePersist(snapshot);
+ }
+ 
+ function syncIdCounterFromLayout() {
+   const ids = [
+     ...state.floorItems.map(it => it.id),
+     ...state.wallItems.map(it => it.id),
+     ...state.customWalls.map(it => it.id),
+-    ...state.doors.map(it => it.id)
++    ...state.doors.map(it => it.id),
++    ...(Array.isArray(state.cables) ? state.cables.map(it => it.id) : [])
+   ];
+   ids.forEach(id => {
+     const match = id ? String(id).match(/_(\d+)$/) : null;
+     if (match) {
+       const candidate = Number(match[1]);
+       if (Number.isFinite(candidate)) {
+         idCounter = Math.max(idCounter, candidate + 1);
+       }
+     }
+   });
+ }
+ 
+ function applyLayout(raw, { skipPersist = false, message } = {}) {
+   if (!raw || typeof raw !== 'object') return false;
+   const layout = raw.layout && typeof raw.layout === 'object' ? raw.layout : raw;
+   suppressPersist = true;
+   try {
+     if (message) showHud(message);
+     if (layout.room) {
+       state.Wmm = Math.max(1000, toNumber(layout.room.W ?? layout.room.width, state.Wmm));
+       state.Lmm = Math.max(1000, toNumber(layout.room.L ?? layout.room.length, state.Lmm));
+     }
+     Winput.value = state.Wmm;
+     Linput.value = state.Lmm;
+ 
+@@ -815,50 +822,51 @@ function applyLayout(raw, { skipPersist = false, message } = {}) {
+     imperialChk.checked = state.imperial;
+     if (state.imperial) {
+       state.snap = 150;
+     }
+     snapInput.value = state.snap;
+ 
+     const floorItems = Array.isArray(layout.floor_items)
+       ? layout.floor_items
+       : Array.isArray(layout.items)
+         ? layout.items.filter(item => item && item.type !== 'socket')
+         : [];
+     const wallItems = Array.isArray(layout.wall_items)
+       ? layout.wall_items
+       : Array.isArray(layout.items)
+         ? layout.items.filter(item => item && item.type === 'socket')
+         : [];
+ 
+     state.floorItems = floorItems.map(normalizeFloorItemFromLayout).filter(Boolean);
+     state.wallItems = wallItems.map(normalizeWallItemFromLayout).filter(Boolean);
+     state.customWalls = Array.isArray(layout.custom_walls)
+       ? layout.custom_walls.map(normalizeCustomWallFromLayout).filter(Boolean)
+       : [];
+     state.doors = Array.isArray(layout.doors)
+       ? layout.doors.map(normalizeDoorFromLayout).filter(Boolean)
+       : [];
++    state.cables = normalizeCableArray(layout);
+ 
+     syncIdCounterFromLayout();
+     recomputeScale();
+     clampStateToRoom();
+     const nextMode = typeof layout.mode === 'string' ? layout.mode : state.mode;
+     setMode(nextMode || 'basic');
+     const surface = normalizeSelectedSurface(layout.selected_surface);
+     setSelectedSurface(surface, { skipRender: true });
+   } finally {
+     suppressPersist = false;
+   }
+ 
+   const snapshot = snapshotLayout();
+   if (skipPersist) {
+     persistLayoutLocal(snapshot);
+     lastPersistedSerialized = JSON.stringify(snapshot);
+   } else {
+     schedulePersist(snapshot);
+   }
+   return true;
+ }
+ 
+ function mmToIn(mm) { return mm / 25.4; }
+ function fmtLen(mm) {
+   if (!state.imperial) return `${Math.round(mm)} mm`;
+diff --git a/dev/shared/scripts/cable_catalog_defaults.js b/dev/shared/scripts/cable_catalog_defaults.js
+index c8fe4a2035e78a49eed403a64453ae6433e653cd..09b93222c82816cc577cfe30f872db07138b085e 100644
+--- a/dev/shared/scripts/cable_catalog_defaults.js
++++ b/dev/shared/scripts/cable_catalog_defaults.js
+@@ -1,141 +1,145 @@
+ ;(function (global) {
+-  const DEFAULT_CABLE_CATALOG = {
+-    cableTypes: {
+-      power: { label: 'Power', maxLength_mm: 3048, color: '#1f2933' },
+-      air: { label: 'Compressed Air', maxLength_mm: 3048, color: '#e5e7eb' },
+-      n2: { label: 'Nitrogen', maxLength_mm: 3048, color: '#16a34a' },
+-      ground: { label: 'Ground', maxLength_mm: 3048, color: '#22c55e' },
+-      vacuum: { label: 'Vacuum', maxLength_mm: 3048, color: 'rgba(255,255,255,0.7)' },
+-      water: { label: 'Water', maxLength_mm: 3048, color: '#1d4ed8' },
+-      ethernet: { label: 'Ethernet', maxLength_mm: 3048, color: '#facc15' }
++  const DEFAULT_CABLE_TYPES = {
++    power: { label: 'Power', maxLength_mm: 3048, color: '#1f2933' },
++    air: { label: 'Compressed Air', maxLength_mm: 3048, color: '#e5e7eb' },
++    n2: { label: 'Nitrogen', maxLength_mm: 3048, color: '#16a34a' },
++    ground: { label: 'Ground', maxLength_mm: 3048, color: '#22c55e' },
++    vacuum: { label: 'Vacuum', maxLength_mm: 3048, color: 'rgba(255,255,255,0.7)' },
++    water: { label: 'Water', maxLength_mm: 3048, color: '#1d4ed8' },
++    ethernet: { label: 'Ethernet', maxLength_mm: 3048, color: '#facc15' }
++  };
++
++  const ALL_CABLE_TYPES = Object.keys(DEFAULT_CABLE_TYPES);
++
++  const DEFAULT_ASSET_CATALOG = {
++    microscope: {
++      boundingBox_mm: { w: 2200, l: 1800, h: 2200 },
++      connectionSockets: [
++        {
++          id: 'microscope_power',
++          label: 'Microscope Power',
++          anchor: { u: 0.1, v: 0.2, w: 0.1 },
++          surface: 'floor',
++          allowedCableTypes: ['power', 'ground']
++        },
++        {
++          id: 'microscope_vacuum',
++          label: 'Vacuum Input',
++          anchor: { u: 0.9, v: 0.2, w: 0.1 },
++          surface: 'floor',
++          allowedCableTypes: ['vacuum']
++        }
++      ]
++    },
++    table: {
++      boundingBox_mm: { w: 1800, l: 900, h: 900 },
++      connectionSockets: [
++        {
++          id: 'table_power',
++          label: 'Table Power',
++          anchor: { u: 0.5, v: 0.5, w: 0.1 },
++          surface: 'floor',
++          allowedCableTypes: ['power', 'ground', 'ethernet']
++        }
++      ]
++    },
++    pump: {
++      boundingBox_mm: { w: 1200, l: 600, h: 1200 },
++      connectionSockets: [
++        {
++          id: 'pump_power',
++          label: 'Pump Power',
++          anchor: { u: 0.5, v: 0.5, w: 0.1 },
++          surface: 'floor',
++          allowedCableTypes: ['power', 'ground']
++        },
++        {
++          id: 'pump_vacuum',
++          label: 'Pump Vacuum',
++          anchor: { u: 0.1, v: 0.5, w: 0.1 },
++          surface: 'floor',
++          allowedCableTypes: ['vacuum']
++        }
++      ]
+     },
+-    assets: {
+-      microscope: {
+-        boundingBox_mm: { w: 2200, l: 1800, h: 2200 },
+-        connectionSockets: [
+-          {
+-            id: 'microscope_power',
+-            label: 'Microscope Power',
+-            anchor: { u: 0.1, v: 0.2, w: 0.1 },
+-            surface: 'floor',
+-            allowedCableTypes: ['power', 'ground']
+-          },
+-          {
+-            id: 'microscope_vacuum',
+-            label: 'Vacuum Input',
+-            anchor: { u: 0.9, v: 0.2, w: 0.1 },
+-            surface: 'floor',
+-            allowedCableTypes: ['vacuum']
+-          }
+-        ]
+-      },
+-      table: {
+-        boundingBox_mm: { w: 1800, l: 900, h: 900 },
+-        connectionSockets: [
+-          {
+-            id: 'table_power',
+-            label: 'Table Power',
+-            anchor: { u: 0.5, v: 0.5, w: 0.1 },
+-            surface: 'floor',
+-            allowedCableTypes: ['power', 'ground', 'ethernet']
+-          }
+-        ]
+-      },
+-      pump: {
+-        boundingBox_mm: { w: 1200, l: 600, h: 1200 },
+-        connectionSockets: [
+-          {
+-            id: 'pump_power',
+-            label: 'Pump Power',
+-            anchor: { u: 0.5, v: 0.5, w: 0.1 },
+-            surface: 'floor',
+-            allowedCableTypes: ['power', 'ground']
+-          },
+-          {
+-            id: 'pump_vacuum',
+-            label: 'Pump Vacuum',
+-            anchor: { u: 0.1, v: 0.5, w: 0.1 },
+-            surface: 'floor',
+-            allowedCableTypes: ['vacuum']
+-          }
+-        ]
+-      },
+-      floorBox: {
+-        boundingBox_mm: { w: 600, l: 600, h: 200 },
+-        connectionSockets: [
+-          {
+-            id: 'floor_box_power',
+-            label: 'Floor Box Power',
+-            anchor: { u: 0.5, v: 0.5, w: 0 },
+-            surface: 'floor',
+-            allowedCableTypes: ['power', 'ground', 'ethernet']
+-          }
+-        ]
+-      },
+-      wall_socket: {
+-        boundingBox_mm: { w: 400, l: 120, h: 600 },
+-        connectionSockets: [
+-          {
+-            id: 'wall_outlet_duplex',
+-            label: 'Duplex Outlet',
+-            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+-            surface: 'wall',
+-            allowedCableTypes: ['power', 'ground']
+-          }
+-        ]
+-      },
+-      wall_gas_socket: {
+-        boundingBox_mm: { w: 400, l: 120, h: 600 },
+-        connectionSockets: [
+-          {
+-            id: 'wall_gas_outlet',
+-            label: 'Gas Outlet',
+-            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+-            surface: 'wall',
+-            allowedCableTypes: ['air', 'n2', 'vacuum'],
+-            offsetDirection: 1
+-          }
+-        ]
+-      },
+-      wall_feedthrough: {
+-        boundingBox_mm: { w: 400, l: 120, h: 600 },
+-        connectionSockets: [
+-          {
+-            id: 'feedthrough_room',
+-            label: 'Feedthrough (Room Side)',
+-            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+-            surface: 'wall',
+-            allowedCableTypes: ALL_CABLE_TYPES,
+-            offsetDirection: 1
+-          },
+-          {
+-            id: 'feedthrough_service',
+-            label: 'Feedthrough (Service Side)',
+-            anchor: { u: 0.5, v: 0.5, w: 0.5 },
+-            surface: 'wall',
+-            allowedCableTypes: ALL_CABLE_TYPES,
+-            offsetDirection: -1
+-          }
+-        ]
+-      }
++    floorBox: {
++      boundingBox_mm: { w: 600, l: 600, h: 200 },
++      connectionSockets: [
++        {
++          id: 'floor_box_power',
++          label: 'Floor Box Power',
++          anchor: { u: 0.5, v: 0.5, w: 0 },
++          surface: 'floor',
++          allowedCableTypes: ['power', 'ground', 'ethernet']
++        }
++      ]
++    },
++    wall_socket: {
++      boundingBox_mm: { w: 400, l: 120, h: 600 },
++      connectionSockets: [
++        {
++          id: 'wall_outlet_duplex',
++          label: 'Duplex Outlet',
++          anchor: { u: 0.5, v: 0.5, w: 0.5 },
++          surface: 'wall',
++          allowedCableTypes: ['power', 'ground']
++        }
++      ]
++    },
++    wall_gas_socket: {
++      boundingBox_mm: { w: 400, l: 120, h: 600 },
++      connectionSockets: [
++        {
++          id: 'wall_gas_outlet',
++          label: 'Gas Outlet',
++          anchor: { u: 0.5, v: 0.5, w: 0.5 },
++          surface: 'wall',
++          allowedCableTypes: ['air', 'n2', 'vacuum'],
++          offsetDirection: 1
++        }
++      ]
++    },
++    wall_feedthrough: {
++      boundingBox_mm: { w: 400, l: 120, h: 600 },
++      connectionSockets: [
++        {
++          id: 'feedthrough_room',
++          label: 'Feedthrough (Room Side)',
++          anchor: { u: 0.5, v: 0.5, w: 0.5 },
++          surface: 'wall',
++          allowedCableTypes: ALL_CABLE_TYPES,
++          offsetDirection: 1
++        },
++        {
++          id: 'feedthrough_service',
++          label: 'Feedthrough (Service Side)',
++          anchor: { u: 0.5, v: 0.5, w: 0.5 },
++          surface: 'wall',
++          allowedCableTypes: ALL_CABLE_TYPES,
++          offsetDirection: -1
++        }
++      ]
+     }
+   };
+ 
+-  const ALL_CABLE_TYPES = Object.keys(DEFAULT_CABLE_CATALOG.cableTypes);
++  const DEFAULT_CABLE_CATALOG = {
++    cableTypes: DEFAULT_CABLE_TYPES,
++    assets: DEFAULT_ASSET_CATALOG
++  };
+ 
+   function normalizeCableCatalogWithDefaults(candidate) {
+     const base = candidate && typeof candidate === 'object' ? candidate : {};
+     const cableTypes = Object.assign({}, DEFAULT_CABLE_CATALOG.cableTypes, base.cableTypes || {});
+     const assets = Object.assign({}, DEFAULT_CABLE_CATALOG.assets, base.assets || {});
+     return Object.assign({}, base, { cableTypes, assets });
+   }
+ 
+   function getDefaultCableColor(type) {
+     const meta = DEFAULT_CABLE_CATALOG.cableTypes[type];
+     return (meta && meta.color) || '#94a3b8';
+   }
+ 
+   global.DEFAULT_CABLE_CATALOG = DEFAULT_CABLE_CATALOG;
+   global.normalizeCableCatalogWithDefaults = normalizeCableCatalogWithDefaults;
+   global.getDefaultCableColor = getDefaultCableColor;
+ })(typeof window !== 'undefined' ? window : globalThis);
+diff --git a/resources/layout_samples/default_room.json b/resources/layout_samples/default_room.json
+index 9f2387c5d3cad004ae17828c7cdab813527c25f5..129b1da5d95a51b63e85dac0cf0db9396110901b 100644
+--- a/resources/layout_samples/default_room.json
++++ b/resources/layout_samples/default_room.json
+@@ -1,20 +1,30 @@
+ {
+   "units": "mm",
+   "room": { "W": 6000, "L": 8000 },
+   "snap_mm": 100,
+   "imperial_display": false,
+   "mode": "basic",
+   "floor_items": [
+     { "id": "floor_1", "type": "microscope", "x": 2200, "y": 5200, "w": 2200, "l": 1800, "rotation": 0 },
+     { "id": "floor_2", "type": "table", "x": 3800, "y": 5200, "w": 1800, "l": 900, "rotation": 0 },
+     { "id": "floor_3", "type": "pump", "x": 4200, "y": 3400, "w": 1200, "l": 600, "rotation": 0 },
+     { "id": "floor_4", "type": "floorBox", "x": 3000, "y": 3600, "w": 600, "l": 600, "rotation": 0 }
+   ],
+   "wall_items": [
+     { "id": "socket_5", "type": "socket", "wall": "base:1", "s": 1500, "h": 300 },
+     { "id": "socket_6", "type": "socket", "wall": "base:3", "s": 4500, "h": 300 }
+   ],
+   "custom_walls": [],
+   "doors": [],
++  "cables": [
++    {
++      "id": "cable_7",
++      "cableType": "power",
++      "source": { "kind": "floor", "assetId": "floor_1", "socketId": "microscope_power" },
++      "target": { "kind": "wall", "assetId": "socket_5", "socketId": "wall_outlet_duplex" },
++      "controlPoints": [],
++      "bendPoints": []
++    }
++  ],
+   "selected_surface": { "type": "floor" }
+ }
+diff --git a/tests/test_frontend_markup.py b/tests/test_frontend_markup.py
+index 645c9b3f62fd5b10cd638ef340e81f077d1e59a1..7d2ca244b1f02c12f4d56f90810013af0920f5bb 100644
+--- a/tests/test_frontend_markup.py
++++ b/tests/test_frontend_markup.py
+@@ -21,51 +21,51 @@ def test_room_survey_handles_gltf_asset_floor_item() -> None:
+ 
+ def test_layout_storage_key_shared_between_views() -> None:
+     survey_html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+         encoding="utf-8"
+     )
+     fps_html = Path(
+         "dev/interactive_3d_room/interactive_3d_room_fps_demo.html"
+     ).read_text(encoding="utf-8")
+     expected = "const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';"
+     assert expected in survey_html
+     assert expected in fps_html
+ 
+ 
+ def test_fps_viewer_handles_pointer_lock_state() -> None:
+     html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+         encoding="utf-8"
+     )
+     assert 'class="control-status"' in html
+     assert 'id="assetStatus"' in html
+     assert "function resetMovementState()" in html
+     assert "pointerlockerror" in html
+     assert 'id="enter-walk"' in html
+     assert 'id="load-gltf"' in html
+     assert 'id="resetAssetView"' in html
+     assert "../shared/vendor/three/GLTFLoader.js" in html
+-    assert "./assets/dozenSidedStack-Body.gltf" in html
++    assert "./assets/dozenSidedStack-Body.glb" in html
+ 
+ 
+ def test_fps_viewer_supports_hand_mode_and_vertical_translation() -> None:
+     html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+         encoding="utf-8"
+     )
+ 
+     assert "const HAND_MODE_TOGGLE_KEY" in html
+     assert "let handModeTranslateStep" in html
+     assert "let handModeVerticalStep" in html
+     assert "transformControls.showY = true" in html
+     assert "scheduleWalkOverlayAutoHide" in html
+     assert "velocity.y += direction.y * speed * delta" in html
+     assert "selectedObject.position.y -= verticalStep" in html
+ 
+ 
+ def test_fps_viewer_traps_space_scroll_and_updates_controls_copy() -> None:
+     html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+         encoding="utf-8"
+     )
+ 
+     assert "function maybePreventNavigationKey" in html
+     assert "Press <strong>Ctrl</strong> to toggle <strong>Hand Mode</strong>" in html
+     assert "Hold <strong>Alt</strong> and drag" in html
+ 
+ 
+EOF
+)

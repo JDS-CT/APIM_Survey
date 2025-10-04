@@ -1,5 +1,11 @@
 # Changelog
 
+## 2025-10-05T08:15:00Z
+- fix: complete step [p1] Restore the cable type dropdown by restructuring the shared default catalog so fallback metadata loads before the fetch completes.
+- feat: complete step [p1] Seed the default survey and FPV layouts with a sample microscope power cable for instant visualization and persistence regression coverage.
+- fix: complete step [p2] Thicken FPV door meshes and offset them from the wall plane to eliminate z-fighting while keeping both sides visible.
+- feat: complete step [p2] Render wall sockets and feedthroughs in FPV using catalog-derived dimensions, colors, and depth offsets so ports appear in the 3D view.
+- chore: complete step [p3] Switch the sample asset loader to a single-file GLB and drop the multi-file GLTF bundle for simpler asset distribution.
 ## 2025-10-05T04:30:00Z
 - fix: complete step [p2] Restore FPV cable rendering by defining shared sample density constants and honoring wall socket offset directions.
 - feat: complete step [p2] Add catalog metadata and UI affordances for wall-mounted gas sockets and dual-sided feedthroughs across survey and FPV views.

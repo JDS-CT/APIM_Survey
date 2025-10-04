@@ -26,12 +26,12 @@ TEST -- using AGENTS.md file
 ✅ [p2] Document and implement visible scale references in 3D review when practical.
   - [x] Investigate lightweight scene helpers (e.g., floor grid decals or meter sticks) and prototype an unobtrusive option.
   - [x] Document the helper and default it on while outlining how to disable or gate it after design feedback.
-🔲 [p2] Add thermostat assets for wall and ceiling contexts, including metadata, thumbnails, and distinct dangling sensor meshes when placed on ceilings.
-  - [ ] Produce catalog definitions and 2D/3D representations for each thermostat variant.
-  - [ ] Ensure placement rules respect wall versus ceiling orientation and cover with tests.
-🔲 [p2] Define catalog entries for chiller, N2 bottle, wall air line barb, bottled air line, and resizable tables with required metadata.
-  - [ ] Capture dimensions, socket metadata, thumbnails, and placement defaults for each new item.
-  - [ ] Add regression coverage for catalog loading and placement serialization.
+✅ [p2] Add thermostat assets for wall and ceiling contexts, including metadata, thumbnails, and distinct dangling sensor meshes when placed on ceilings.
+  - [x] Produce catalog definitions and 2D/3D representations for each thermostat variant.
+  - [x] Ensure placement rules respect wall versus ceiling orientation and cover with tests.
+✅ [p2] Define catalog entries for chiller, N2 bottle, wall air line barb, bottled air line, and resizable tables with required metadata.
+  - [x] Capture dimensions, socket metadata, thumbnails, and placement defaults for each new item.
+  - [x] Add regression coverage for catalog loading and placement serialization.
 🔲 [p3] Catalog reusable "glass light" theme tokens for future room survey prototypes.
   - [ ] Extract existing colors/typography/elevation into shared theme primitives.
   - [ ] Publish guidance in the design tokens documentation and cover with snapshot tests if applicable.

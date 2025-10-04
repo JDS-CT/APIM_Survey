@@ -19,6 +19,20 @@ def test_room_survey_handles_gltf_asset_floor_item() -> None:
     assert "elevation_mm" in html
 
 
+def test_room_survey_lists_new_catalog_assets() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'value="thermostat_wall"' in html
+    assert 'value="thermostat_ceiling"' in html
+    assert 'value="wall_air_barb"' in html
+    assert 'value="chiller"' in html
+    assert 'value="n2_bottle"' in html
+    assert 'value="bottled_air_line"' in html
+    assert 'value="table_resizable"' in html
+
+
 def test_layout_storage_key_shared_between_views() -> None:
     survey_html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
         encoding="utf-8"
@@ -117,6 +131,8 @@ def test_room_survey_exposes_cable_controls_and_rendering() -> None:
     assert "cables: state.cables.map" in html
     assert 'value="gas_socket"' in html
     assert 'value="feedthrough"' in html
+    assert 'id="ceilingItems"' in html
+    assert "group.dataset.surface" in html
 
 
 def test_room_survey_exposes_cable_bend_points() -> None:
@@ -206,6 +222,10 @@ def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
     assert "normalizeCableCatalogWithDefaults" in html
     assert "async function refreshCableMeshes" in html
     assert "const CABLE_SAMPLE_SEGMENTS" in html
+    assert "thermostat_wall" in html
+    assert "ceilingThermostat" in html
+    assert "wall_air_barb" in html
+    assert "chiller" in html
 
 
 def test_fps_viewer_uses_human_scale_height_and_markers() -> None:

@@ -304,6 +304,9 @@
     .scale-bar-tick { stroke: #0f172a; stroke-width: 2; }
     .scale-bar-label { dominant-baseline: hanging; }
     svg[data-orientation="ceiling"] #floorItems { opacity: 0.35; }
+    svg[data-orientation="floor"] #ceilingItems { opacity: 0.2; }
+    svg[data-orientation="ceiling"] #ceilingItems { opacity: 1; }
+    svg[data-orientation="wall"] #ceilingItems { display: none; }
     svg[data-orientation="wall"] #grid,
     svg[data-orientation="wall"] #origin,
     svg[data-orientation="wall"] #originLabel,
@@ -313,6 +316,7 @@
     svg[data-orientation="wall"] #customWalls,
     svg[data-orientation="wall"] #doorsLayer,
     svg[data-orientation="wall"] #floorItems,
+    svg[data-orientation="wall"] #ceilingItems,
     svg[data-orientation="wall"] #wallItems {
       display: none;
     }
@@ -397,6 +401,9 @@
               <option value="microscope">Microscope</option>
               <option value="table">Table</option>
               <option value="pump">Vacuum Pump</option>
+              <option value="chiller">Chiller</option>
+              <option value="table_resizable">Resizable Table</option>
+              <option value="thermostat_ceiling">Ceiling Thermostat</option>
             </select>
           </label>
           <button class="btn" id="basicAdd">Add</button>
@@ -409,9 +416,16 @@
               <option value="microscope">Microscope</option>
               <option value="table">Table</option>
               <option value="pump">Vacuum Pump</option>
+              <option value="chiller">Chiller</option>
+              <option value="n2_bottle">N2 Bottle</option>
+              <option value="bottled_air_line">Bottled Air Line</option>
+              <option value="table_resizable">Resizable Table</option>
+              <option value="thermostat_ceiling">Ceiling Thermostat</option>
               <option value="socket">Wall Socket (Power)</option>
               <option value="gas_socket">Gas Socket</option>
               <option value="feedthrough">Wall Feedthrough</option>
+              <option value="wall_air_barb">Wall Air Line Barb</option>
+              <option value="thermostat_wall">Wall Thermostat</option>
             </select>
           </label>
           <label class="wall-choice">
@@ -449,15 +463,20 @@
           <div class="inventory-empty" id="inventoryEmpty">Add doors and equipment to populate this summary.</div>
         </div>
       </div>
-      <div class="panel legend">
-        <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
-        <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
-        <div><span class="dot" style="background:#22c55e"></span>Gas Socket</div>
-        <div><span class="dot" style="background:#0ea5e9"></span>Feedthrough</div>
-        <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
-        <div><span class="dot" style="background:#3949ab"></span>Table</div>
-        <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
-      </div>
+        <div class="panel legend">
+          <div><span class="dot" style="background:#1e88e5"></span>Floor Box</div>
+          <div><span class="dot" style="background:#f9a825"></span>Wall Socket (Power)</div>
+          <div><span class="dot" style="background:#22c55e"></span>Gas Socket</div>
+          <div><span class="dot" style="background:#0ea5e9"></span>Feedthrough</div>
+          <div><span class="dot" style="background:#8e24aa"></span>Microscope</div>
+          <div><span class="dot" style="background:#3949ab"></span>Table</div>
+          <div><span class="dot" style="background:#ef6c00"></span>Vacuum Pump</div>
+          <div><span class="dot" style="background:#1d4ed8"></span>Chiller</div>
+          <div><span class="dot" style="background:#14532d"></span>N2 Bottle</div>
+          <div><span class="dot" style="background:#f97316"></span>Bottled Air Line</div>
+          <div><span class="dot" style="background:#f59e0b"></span>Wall Thermostat</div>
+          <div><span class="dot" style="background:#fdba74"></span>Ceiling Thermostat</div>
+        </div>
     </aside>
     <section class="workspace">
       <div class="panel stage-panel">
@@ -489,6 +508,7 @@
             <g id="customWalls"></g>
             <g id="doorsLayer"></g>
             <g id="floorItems"></g>
+            <g id="ceilingItems"></g>
             <g id="wallItems"></g>
             <g id="wallElevationLayer"></g>
             <g id="scaleOverlay"></g>
@@ -547,6 +567,7 @@ const selectionG = document.getElementById('selectionOverlay');
 const customWallsG = document.getElementById('customWalls');
 const doorsG = document.getElementById('doorsLayer');
 const floorItemsG = document.getElementById('floorItems');
+const ceilingItemsG = document.getElementById('ceilingItems');
 const wallItemsG = document.getElementById('wallItems');
 const wallElevationLayer = document.getElementById('wallElevationLayer');
 const scaleOverlayG = document.getElementById('scaleOverlay');
@@ -559,6 +580,11 @@ const FLOOR_ITEM_DEFS = {
   microscope: { label: 'Microscope', w: 2200, l: 1800, fill: '#8e24aa', stroke: '#5e35b1' },
   table: { label: 'Table', w: 1800, l: 900, fill: '#3949ab', stroke: '#1a237e' },
   pump: { label: 'Vacuum Pump', w: 1200, l: 600, fill: '#ef6c00', stroke: '#e65100' },
+  chiller: { label: 'Chiller', w: 1200, l: 800, fill: '#1d4ed8', stroke: '#1e3a8a' },
+  n2_bottle: { label: 'N2 Bottle', w: 450, l: 450, fill: '#14532d', stroke: '#065f46' },
+  bottled_air_line: { label: 'Bottled Air Line', w: 600, l: 600, fill: '#f97316', stroke: '#c2410c' },
+  table_resizable: { label: 'Resizable Table', w: 2000, l: 1000, fill: '#2563eb', stroke: '#1e40af' },
+  thermostat_ceiling: { label: 'Ceiling Thermostat', w: 240, l: 240, fill: '#fdba74', stroke: '#f97316', surface: 'ceiling' },
   gltfAsset: { label: 'GLTF Asset', w: 2000, l: 2000, fill: '#8b5cf6', stroke: '#6d28d9' }
 };
 
@@ -634,6 +660,54 @@ const WALL_ITEM_DEFS = {
         offsetDirection: -1
       }
     ]
+  },
+  wall_air_barb: {
+    label: 'Wall Air Barb',
+    idPrefix: 'airbarb',
+    fill: '#0ea5e9',
+    stroke: '#0284c7',
+    assetKey: 'wall_air_barb',
+    defaultDepth: 260,
+    mountHeightMm: 1500,
+    depthDirections: [1],
+    fallbackSockets: [
+      {
+        id: 'wall_air_barb',
+        label: 'Air Barb',
+        anchor: { u: 0.5, v: 0.5, w: 0.5 },
+        allowedCableTypes: ['air'],
+        surface: 'wall',
+        offsetDirection: 1
+      }
+    ]
+  },
+  thermostat_wall: {
+    label: 'Wall Thermostat',
+    idPrefix: 'thermo',
+    fill: '#f59e0b',
+    stroke: '#b45309',
+    assetKey: 'thermostat_wall',
+    defaultDepth: 120,
+    mountHeightMm: 1500,
+    depthDirections: [1],
+    fallbackSockets: [
+      {
+        id: 'thermostat_power',
+        label: 'Thermostat Power',
+        anchor: { u: 0.5, v: 0.5, w: 0.6 },
+        allowedCableTypes: ['power'],
+        surface: 'wall',
+        offsetDirection: 1
+      },
+      {
+        id: 'thermostat_data',
+        label: 'Thermostat Data',
+        anchor: { u: 0.5, v: 0.5, w: 0.3 },
+        allowedCableTypes: ['ethernet'],
+        surface: 'wall',
+        offsetDirection: 1
+      }
+    ]
   }
 };
 
@@ -643,11 +717,15 @@ const DEFAULT_ROOM_PRESET = () => ({
     { id: 'floor_1', type: 'microscope', x: 2200, y: 5200, rotation: 0 },
     { id: 'floor_2', type: 'table', x: 3800, y: 5200, rotation: 0 },
     { id: 'floor_3', type: 'pump', x: 4200, y: 3400, rotation: 0 },
-    { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 }
+    { id: 'floor_4', type: 'floorBox', x: 3000, y: 3600, rotation: 0 },
+    { id: 'floor_5', type: 'chiller', x: 1600, y: 3600, rotation: 0 },
+    { id: 'floor_6', type: 'thermostat_ceiling', x: 3200, y: 2400, rotation: 0 }
   ],
   wall_items: [
     { id: 'socket_5', type: 'socket', wall: 'base:1', s: 1500, h: 300 },
-    { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 }
+    { id: 'socket_6', type: 'socket', wall: 'base:3', s: 4500, h: 300 },
+    { id: 'thermo_7', type: 'thermostat_wall', wall: 'base:2', s: 2400, h: 150 },
+    { id: 'airbarb_8', type: 'wall_air_barb', wall: 'base:4', s: 3000, h: 220 }
   ],
   cables: [
     {
@@ -2539,6 +2617,9 @@ function renderWallItems() {
 
 function renderFloorItems() {
   floorItemsG.innerHTML = '';
+  if (ceilingItemsG) {
+    ceilingItemsG.innerHTML = '';
+  }
   state.floorItems.forEach(item => {
     const def = FLOOR_ITEM_DEFS[item.type] || FLOOR_ITEM_DEFS.floorBox;
     const wmm = item.w || def.w;
@@ -2548,6 +2629,8 @@ function renderFloorItems() {
     const [cx, cy] = mmToPx(item.x, item.y);
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.floorItemId = item.id;
+    const surface = def.surface || 'floor';
+    group.dataset.surface = surface;
     group.setAttribute('transform', `translate(${cx},${cy}) rotate(${item.rotation || 0})`);
     group.setAttribute('cursor', 'move');
     group.addEventListener('pointerdown', handleFloorDragStart);
@@ -2575,7 +2658,8 @@ function renderFloorItems() {
     text.textContent = def.label;
     group.appendChild(text);
 
-    floorItemsG.appendChild(group);
+    const targetLayer = surface === 'ceiling' && ceilingItemsG ? ceilingItemsG : floorItemsG;
+    targetLayer.appendChild(group);
   });
 }
 

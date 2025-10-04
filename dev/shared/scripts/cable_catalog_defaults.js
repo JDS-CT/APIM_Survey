@@ -119,6 +119,121 @@
           offsetDirection: -1
         }
       ]
+    },
+    wall_air_barb: {
+      boundingBox_mm: { w: 260, l: 90, h: 220 },
+      connectionSockets: [
+        {
+          id: 'wall_air_barb',
+          label: 'Air Barb',
+          anchor: { u: 0.5, v: 0.5, w: 0.5 },
+          surface: 'wall',
+          allowedCableTypes: ['air'],
+          offsetDirection: 1
+        }
+      ]
+    },
+    thermostat_wall: {
+      boundingBox_mm: { w: 180, l: 80, h: 220 },
+      connectionSockets: [
+        {
+          id: 'thermostat_power',
+          label: 'Thermostat Power',
+          anchor: { u: 0.5, v: 0.5, w: 0.65 },
+          surface: 'wall',
+          allowedCableTypes: ['power'],
+          offsetDirection: 1
+        },
+        {
+          id: 'thermostat_data',
+          label: 'Thermostat Data',
+          anchor: { u: 0.5, v: 0.5, w: 0.35 },
+          surface: 'wall',
+          allowedCableTypes: ['ethernet'],
+          offsetDirection: 1
+        }
+      ]
+    },
+    thermostat_ceiling: {
+      boundingBox_mm: { w: 240, l: 240, h: 120 },
+      connectionSockets: [
+        {
+          id: 'thermostat_ceiling_power',
+          label: 'Ceiling Thermostat Power',
+          anchor: { u: 0.5, v: 0.5, w: 0.8 },
+          surface: 'ceiling',
+          allowedCableTypes: ['power']
+        },
+        {
+          id: 'thermostat_ceiling_data',
+          label: 'Ceiling Thermostat Data',
+          anchor: { u: 0.5, v: 0.5, w: 0.5 },
+          surface: 'ceiling',
+          allowedCableTypes: ['ethernet']
+        }
+      ]
+    },
+    chiller: {
+      boundingBox_mm: { w: 1200, l: 800, h: 1400 },
+      connectionSockets: [
+        {
+          id: 'chiller_power',
+          label: 'Chiller Power',
+          anchor: { u: 0.2, v: 0.5, w: 0.2 },
+          surface: 'floor',
+          allowedCableTypes: ['power', 'ground']
+        },
+        {
+          id: 'chiller_water',
+          label: 'Chiller Water Return',
+          anchor: { u: 0.8, v: 0.5, w: 0.2 },
+          surface: 'floor',
+          allowedCableTypes: ['water']
+        },
+        {
+          id: 'chiller_network',
+          label: 'Chiller Network',
+          anchor: { u: 0.5, v: 0.5, w: 0.5 },
+          surface: 'floor',
+          allowedCableTypes: ['ethernet']
+        }
+      ]
+    },
+    n2_bottle: {
+      boundingBox_mm: { w: 450, l: 450, h: 1500 },
+      connectionSockets: [
+        {
+          id: 'n2_bottle_regulator',
+          label: 'N2 Regulator',
+          anchor: { u: 0.5, v: 0.5, w: 0.9 },
+          surface: 'floor',
+          allowedCableTypes: ['n2']
+        }
+      ]
+    },
+    bottled_air_line: {
+      boundingBox_mm: { w: 600, l: 600, h: 1100 },
+      connectionSockets: [
+        {
+          id: 'bottled_air_supply',
+          label: 'Bottled Air Supply',
+          anchor: { u: 0.5, v: 0.5, w: 0.8 },
+          surface: 'floor',
+          allowedCableTypes: ['air']
+        }
+      ]
+    },
+    table_resizable: {
+      boundingBox_mm: { w: 2000, l: 1000, h: 900 },
+      connectionSockets: [
+        {
+          id: 'table_resizable_power',
+          label: 'Table Power',
+          anchor: { u: 0.5, v: 0.5, w: 0.1 },
+          surface: 'floor',
+          allowedCableTypes: ['power', 'ground', 'ethernet']
+        }
+      ]
     }
   };
 

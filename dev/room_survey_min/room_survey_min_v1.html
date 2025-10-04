@@ -530,6 +530,7 @@
       parseOrientationKey,
       snapshotOrientation,
     } from './orientation_helpers.js';
+    import { applyDragSnap, snapPoint, snapValue } from './drag_snap.js';
 
 const bodyEl = document.body;
 const svg = document.getElementById('stage');
@@ -927,8 +928,8 @@ function applyDefaultPreset() {
       if (!normalized) return null;
       return {
         ...normalized,
-        x: snapValue(normalized.x),
-        y: snapValue(normalized.y)
+        x: snapValue(normalized.x, state.snap),
+        y: snapValue(normalized.y, state.snap)
       };
     })
     .filter(Boolean);
@@ -1344,41 +1345,31 @@ function fmtLen(mm) {
   return `${Math.round(mm)} mm (${inches.toFixed(2)} in)`;
 }
 
-function snapValue(vmm) {
-  const s = state.snap;
-  if (!s) return vmm;
-  return Math.round(vmm / s) * s;
-}
-
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-function snapPoint(pt) {
-  return { x: snapValue(pt.x), y: snapValue(pt.y) };
-}
 
 function resnapAll() {
   state.floorItems.forEach(item => {
-    if (typeof item.x === 'number') item.x = snapValue(item.x);
-    if (typeof item.y === 'number') item.y = snapValue(item.y);
+    if (typeof item.x === 'number') item.x = snapValue(item.x, state.snap);
+    if (typeof item.y === 'number') item.y = snapValue(item.y, state.snap);
   });
   state.wallItems.forEach(item => {
     if (WALL_ITEM_DEFS[item.type]) {
-      if (typeof item.s === 'number') item.s = snapValue(item.s);
-      if (typeof item.h === 'number') item.h = snapValue(item.h);
+      if (typeof item.s === 'number') item.s = snapValue(item.s, state.snap);
+      if (typeof item.h === 'number') item.h = snapValue(item.h, state.snap);
       if (typeof item.mountHeight_mm === 'number') {
-        item.mountHeight_mm = snapValue(item.mountHeight_mm);
+        item.mountHeight_mm = snapValue(item.mountHeight_mm, state.snap);
       }
     }
   });
   state.customWalls.forEach(wall => {
-    if (typeof wall.x1 === 'number') wall.x1 = snapValue(wall.x1);
-    if (typeof wall.y1 === 'number') wall.y1 = snapValue(wall.y1);
-    if (typeof wall.x2 === 'number') wall.x2 = snapValue(wall.x2);
-    if (typeof wall.y2 === 'number') wall.y2 = snapValue(wall.y2);
+    if (typeof wall.x1 === 'number') wall.x1 = snapValue(wall.x1, state.snap);
+    if (typeof wall.y1 === 'number') wall.y1 = snapValue(wall.y1, state.snap);
+    if (typeof wall.x2 === 'number') wall.x2 = snapValue(wall.x2, state.snap);
+    if (typeof wall.y2 === 'number') wall.y2 = snapValue(wall.y2, state.snap);
   });
   state.doors.forEach(door => {
-    if (typeof door.offset === 'number') door.offset = snapValue(door.offset);
-    if (typeof door.width === 'number') door.width = snapValue(door.width);
+    if (typeof door.offset === 'number') door.offset = snapValue(door.offset, state.snap);
+    if (typeof door.width === 'number') door.width = snapValue(door.width, state.snap);
   });
 }
 
@@ -1895,43 +1886,6 @@ function defaultHudMessage() {
   return `${snapStr} | Selected: ${sel}`;
 }
 
-function applySelectedWallItemMountHeight(heightMm) {
-  if (!state.selectedSurface || state.selectedSurface.type !== 'wallItem') return;
-  const item = state.wallItems.find(w => w.id === state.selectedSurface.id);
-  if (!item) return;
-  const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
-  const clamped = clamp(Number(heightMm) || 0, 0, DEFAULT_ROOM_HEIGHT_MM);
-  const snapped = snapValue(clamped);
-  if (item.mountHeight_mm === snapped) return;
-  item.mountHeight_mm = snapped;
-  showHud(`Set ${def.label} height to ${fmtLen(snapped)}.`);
-  render();
-}
-
-function updateWallItemControls() {
-  if (!wallItemControlsEl) return;
-  const selected = state.selectedSurface && state.selectedSurface.type === 'wallItem'
-    ? state.wallItems.find(w => w.id === state.selectedSurface.id)
-    : null;
-  const def = selected ? WALL_ITEM_DEFS[selected.type] || WALL_ITEM_DEFS.socket : null;
-  const mountHeight = selected ? getWallItemMountHeight(selected) : DEFAULT_WALL_MOUNT_HEIGHT_MM;
-  const message = selected
-    ? `${def ? def.label : 'Wall item'} height ${fmtLen(mountHeight)}`
-    : 'Select a wall-mounted item to edit its mount height.';
-  if (wallItemSelectionNoteEl) {
-    wallItemSelectionNoteEl.textContent = message;
-  }
-  const sliderValue = Math.round(mountHeight);
-  if (wallItemMountSliderEl) {
-    wallItemMountSliderEl.disabled = !selected;
-    wallItemMountSliderEl.value = `${sliderValue}`;
-  }
-  if (wallItemMountInputEl) {
-    wallItemMountInputEl.disabled = !selected;
-    wallItemMountInputEl.value = `${sliderValue}`;
-  }
-}
-
 function render() {
   updateWallSelect();
   const type = orientationType();
@@ -1947,7 +1901,6 @@ function render() {
   updateOrientationActiveState();
   renderScaleOverlay();
   renderInventoryTable();
-  updateWallItemControls();
   hud.textContent = hudTransient || defaultHudMessage();
   hudTransient = null;
   maybePersistLayout();
@@ -2742,7 +2695,7 @@ function handleCustomWallLineDown(evt) {
   if (!wall) return;
   const pt = svgPoint(evt);
   const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
-  const snapped = snapPoint(roomPt);
+  const snapped = snapPoint(roomPt, state.snap);
   drag = {
     kind: 'wall-move',
     wallId,
@@ -2764,7 +2717,7 @@ function handleWallHandleDown(evt) {
   setSelectedSurface({ type: 'wall', ref: `custom:${wallId}` }, { skipRender: true });
   const pt = svgPoint(evt);
   const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
-  const snapped = snapPoint(roomPt);
+  const snapped = snapPoint(roomPt, state.snap);
   drag = {
     kind: 'wall-handle',
     wallId,
@@ -2797,10 +2750,14 @@ document.addEventListener('pointermove', evt => {
   if (drag.kind === 'floor') {
     const item = state.floorItems.find(f => f.id === drag.id);
     if (!item) return;
-    const newX = snapValue(roomPt.x - drag.offsetX);
-    const newY = snapValue(roomPt.y - drag.offsetY);
-    item.x = clamp(newX, 0, state.Wmm);
-    item.y = clamp(newY, 0, state.Lmm);
+    const snapped = applyDragSnap({
+      pointer: roomPt,
+      offsets: { x: drag.offsetX, y: drag.offsetY },
+      snap: state.snap,
+      limits: { minX: 0, maxX: state.Wmm, minY: 0, maxY: state.Lmm }
+    });
+    item.x = snapped.x;
+    item.y = snapped.y;
     showHud(`${FLOOR_ITEM_DEFS[item.type]?.label || 'Item'} @ (${fmtLen(item.x)}, ${fmtLen(item.y)})`);
     render();
   } else if (drag.kind === 'socketS') {
@@ -2809,7 +2766,7 @@ document.addEventListener('pointermove', evt => {
     const geom = getWallGeometry(item.wall);
     if (!geom) return;
     const proj = projectPointOntoWall(geom, roomPt);
-    item.s = snapValue(proj.s);
+    item.s = snapValue(proj.s, state.snap);
     const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
     showHud(`${def.label} offset ${fmtLen(item.s)} on ${geom.label}`);
     render();
@@ -2820,7 +2777,7 @@ document.addEventListener('pointermove', evt => {
     if (!geom) return;
     const proj = projectPointOntoWall(geom, roomPt);
     const standoff = clamp(Math.abs(proj.distance), 0, 4000);
-    item.h = snapValue(standoff);
+    item.h = snapValue(standoff, state.snap);
     const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
     showHud(`${def.label} standoff ${fmtLen(item.h)} on ${geom.label}`);
     render();
@@ -2829,8 +2786,8 @@ document.addEventListener('pointermove', evt => {
     if (!wall) return;
     const dx = roomPt.x - drag.start.x;
     const dy = roomPt.y - drag.start.y;
-    const start = snapPoint({ x: drag.orig.x1 + dx, y: drag.orig.y1 + dy });
-    const end = snapPoint({ x: drag.orig.x2 + dx, y: drag.orig.y2 + dy });
+    const start = snapPoint({ x: drag.orig.x1 + dx, y: drag.orig.y1 + dy }, state.snap);
+    const end = snapPoint({ x: drag.orig.x2 + dx, y: drag.orig.y2 + dy }, state.snap);
     const clampStart = clampPointToRoom(start);
     const clampEnd = clampPointToRoom(end);
     wall.x1 = clampStart.x;
@@ -2842,7 +2799,7 @@ document.addEventListener('pointermove', evt => {
   } else if (drag.kind === 'wall-handle') {
     const wall = getCustomWallById(drag.wallId);
     if (!wall) return;
-    const snapped = snapPoint(roomPt);
+    const snapped = snapPoint(roomPt, state.snap);
     const clamped = clampPointToRoom(snapped);
     if (drag.handle === 'start') {
       wall.x1 = clamped.x;
@@ -2861,7 +2818,7 @@ document.addEventListener('pointermove', evt => {
     const proj = projectPointOntoWall(geom, roomPt);
     const half = door.width / 2;
     const maxCenter = Math.max(half, geom.length - half);
-    const centerSnapped = snapValue(proj.s);
+    const centerSnapped = snapValue(proj.s, state.snap);
     const center = clamp(centerSnapped, half, maxCenter);
     door.offset = clamp(center - half, 0, Math.max(0, geom.length - door.width));
     showHud(`Door position ${fmtLen(center)} along ${geom.label}`);
@@ -2872,14 +2829,16 @@ document.addEventListener('pointermove', evt => {
     const view = state.view;
     if (!view || view.type !== 'wall' || !view.wallGeom || item.wall !== drag.wallRef) return;
     const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
-    const nextOffset = snapValue(roomPt.x - drag.offsetX);
-    const nextHeight = snapValue(roomPt.y - drag.offsetY);
-    const offset = clamp(nextOffset, 0, view.widthMm);
-    const height = clamp(nextHeight, 0, view.heightMm);
-    item.s = offset;
-    item.mountHeight_mm = height;
+    const snapped = applyDragSnap({
+      pointer: roomPt,
+      offsets: { x: drag.offsetX, y: drag.offsetY },
+      snap: state.snap,
+      limits: { minX: 0, maxX: view.widthMm, minY: 0, maxY: view.heightMm }
+    });
+    item.s = snapped.x;
+    item.mountHeight_mm = snapped.y;
     const wallLabel = view.wallGeom.label || 'Wall';
-    showHud(`${def.label} @ ${fmtLen(offset)} · height ${fmtLen(height)} on ${wallLabel}`);
+    showHud(`${def.label} @ ${fmtLen(item.s)} · height ${fmtLen(item.mountHeight_mm)} on ${wallLabel}`);
     render();
   }
 });
@@ -2964,11 +2923,11 @@ svg.addEventListener('pointerdown', evt => {
   const pt = svgPoint(evt);
   const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
   if (!drawWallState.start) {
-    drawWallState.start = snapPoint(roomPt);
+    drawWallState.start = snapPoint(roomPt, state.snap);
     showHud('Select second point for new wall');
   } else {
     const start = drawWallState.start;
-    const end = snapPoint(roomPt);
+    const end = snapPoint(roomPt, state.snap);
     if (Math.hypot(end.x - start.x, end.y - start.y) > 10) {
       const wall = {
         id: genId('wall'),
@@ -3039,8 +2998,8 @@ basicAddBtn.addEventListener('click', () => {
   const item = {
     id: genId('floor'),
     type,
-    x: snapValue(state.Wmm / 2),
-    y: snapValue(state.Lmm / 2),
+    x: snapValue(state.Wmm / 2, state.snap),
+    y: snapValue(state.Lmm / 2, state.snap),
     w: def.w,
     l: def.l,
     rotation: 0
@@ -3062,11 +3021,11 @@ addBtn.addEventListener('click', () => {
       showHud('Select a wall before adding wall items');
       return;
     }
-    const s = snapValue(geom.length / 2);
-    const depth = snapValue(def.defaultDepth);
+    const s = snapValue(geom.length / 2, state.snap);
+    const depth = snapValue(def.defaultDepth, state.snap);
     const mountHeight = def.mountHeightMm !== undefined
-      ? snapValue(def.mountHeightMm)
-      : snapValue(1200);
+      ? snapValue(def.mountHeightMm, state.snap)
+      : snapValue(1200, state.snap);
     const item = {
       id: genId(def.idPrefix || 'wallItem'),
       type,
@@ -3084,8 +3043,8 @@ addBtn.addEventListener('click', () => {
     const item = {
       id: genId('floor'),
       type,
-      x: snapValue(state.Wmm / 2),
-      y: snapValue(state.Lmm / 2),
+      x: snapValue(state.Wmm / 2, state.snap),
+      y: snapValue(state.Lmm / 2, state.snap),
       w: def.w,
       l: def.l,
       rotation: 0
@@ -3126,7 +3085,7 @@ addDoorBtn.addEventListener('click', () => {
   const door = {
     id: genId('door'),
     wall: geom.ref,
-    offset: snapValue(maxOffset / 2),
+    offset: snapValue(maxOffset / 2, state.snap),
     width,
     thickness: DOOR_DEFAULT_THICKNESS
   };
@@ -3222,20 +3181,6 @@ const CABLE_SAMPLE_SEGMENTS = 48;
 const GROUND_Z_MM = 0;
 const CABLE_DROP_FRACTION = 0.2;
 const CABLE_DROP_MAX_MM = 450;
-const WALL_ITEM_CONTROLS_TEMPLATE = `
-      <div class="panel" id="wallItemControls">
-        <h3>Wall Item Details</h3>
-        <div class="note" id="wallItemSelectionNote">Select a wall-mounted item to edit its mount height.</div>
-        <label>
-          Adjust mount height
-          <input type="range" id="wallItemMountHeightSlider" min="0" max="${DEFAULT_ROOM_HEIGHT_MM}" step="10" disabled>
-        </label>
-        <label>
-          Mount height (mm)
-          <input type="number" id="wallItemMountHeight" min="0" max="${DEFAULT_ROOM_HEIGHT_MM}" step="10" disabled>
-        </label>
-      </div>
-`;
 const CABLE_CONTROLS_TEMPLATE = `
       <div class="panel" id="cableControls">
         <h3>Service Cables</h3>
@@ -3252,10 +3197,6 @@ const CABLE_CONTROLS_TEMPLATE = `
       </div>
 `;
 
-let wallItemControlsEl = null;
-let wallItemMountInputEl = null;
-let wallItemMountSliderEl = null;
-let wallItemSelectionNoteEl = null;
 let cableTypeSelectEl = null;
 let cancelCableBtnEl = null;
 let deleteCableBtnEl = null;
@@ -3960,7 +3901,7 @@ function renderCables() {
       setSelectedSurface({ type: 'cable', id: cable.id });
       const pt = svgPoint(evt);
       const roomPt = svgPointToRoomMm(pt);
-      const snapped = snapPoint(clampPointToRoom(roomPt));
+      const snapped = snapPoint(clampPointToRoom(roomPt), state.snap);
       if (insertCableBendPoint(cable, snapped)) {
         evt.stopPropagation();
         evt.preventDefault();
@@ -4020,7 +3961,7 @@ function insertCableBendPoint(cable, approxPoint) {
   const start = resolveSocketPosition(cable.source);
   const end = resolveSocketPosition(cable.target);
   if (!start || !end) return false;
-  const snapped = snapPoint(approxPoint);
+  const snapped = snapPoint(approxPoint, state.snap);
   const rawPoint = snapped;
   let insertIndex = Array.isArray(cable.bendPoints) ? cable.bendPoints.length : 0;
   let finalPoint = {
@@ -4054,7 +3995,7 @@ function insertCableBendPoint(cable, approxPoint) {
       };
     }
   }
-  const snappedFinal = snapPoint(finalPoint);
+  const snappedFinal = snapPoint(finalPoint, state.snap);
   const bendPoint = {
     x: snappedFinal.x,
     y: snappedFinal.y,
@@ -4067,37 +4008,6 @@ function insertCableBendPoint(cable, approxPoint) {
   showHud('Added bend point.');
   return true;
 }
-
- (function setupWallItemControls() {
-  const aside = document.querySelector('aside');
-  if (!aside) return;
-  aside.insertAdjacentHTML('beforeend', WALL_ITEM_CONTROLS_TEMPLATE);
-  wallItemControlsEl = document.getElementById('wallItemControls');
-  wallItemMountInputEl = document.getElementById('wallItemMountHeight');
-  wallItemMountSliderEl = document.getElementById('wallItemMountHeightSlider');
-  wallItemSelectionNoteEl = document.getElementById('wallItemSelectionNote');
-  if (wallItemMountSliderEl) {
-    wallItemMountSliderEl.addEventListener('input', evt => {
-      const value = Number(evt.target.value);
-      if (!Number.isFinite(value)) return;
-      if (wallItemMountInputEl) {
-        wallItemMountInputEl.value = `${Math.round(value)}`;
-      }
-      applySelectedWallItemMountHeight(value);
-    });
-  }
-  if (wallItemMountInputEl) {
-    wallItemMountInputEl.addEventListener('change', evt => {
-      const value = Number(evt.target.value);
-      if (!Number.isFinite(value)) return;
-      if (wallItemMountSliderEl) {
-        wallItemMountSliderEl.value = `${Math.round(value)}`;
-      }
-      applySelectedWallItemMountHeight(value);
-    });
-  }
-  updateWallItemControls();
-})();
 
 (function setupCablePrototype() {
   const aside = document.querySelector('aside');
@@ -4255,7 +4165,7 @@ function insertCableBendPoint(cable, approxPoint) {
     const roomPt = drag.kind === 'cable-handle' || drag.kind === 'cable-bend'
       ? rawRoomPt
       : clampPointToRoom(rawRoomPt);
-    const snapped = snapPoint(roomPt);
+    const snapped = snapPoint(roomPt, state.snap);
     if (drag.kind === 'cable-handle') {
       const handle = cable.controlPoints[drag.handleIndex];
       if (!handle) return;

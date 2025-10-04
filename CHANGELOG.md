@@ -1,6 +1,10 @@
 
 # Changelog
 
+## 2025-10-06T19:15:00Z
+- feat: complete step [p1] Restore wall elevation drag snapping with the shared floor pipeline and remove the legacy mount height panel.
+- test: add drag snap module coverage plus markup checks for the shared snap import and wall HUD updates.
+
 ## 2025-10-06T12:45:00Z
 - feat: complete step [p2] Add wall and ceiling thermostat assets with catalog metadata, ceiling plan overlays, and FPV hanging sensor meshes plus regression coverage.
 - feat: complete step [p2] Define catalog entries for chiller, N2 bottle, wall air barb, bottled air line, and resizable tables with shared defaults across 2D and FPV views.

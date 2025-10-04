@@ -181,6 +181,24 @@ def test_room_survey_provides_wall_elevation_and_scale_overlay() -> None:
     assert "const SCALE_OVERLAY_CONFIG" in html
 
 
+def test_room_survey_imports_shared_drag_snap_pipeline() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "from './drag_snap.js'" in html
+    assert "applyDragSnap({" in html
+
+
+def test_room_survey_hides_legacy_wall_height_controls() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="wallItemControls"' not in html
+    assert "Wall Item Details" not in html
+
+
 def test_room_survey_inventory_table_with_fit_checks() -> None:
     html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
         encoding="utf-8"
@@ -200,7 +218,8 @@ def test_wall_elevation_uses_shared_snap_drag_pipeline() -> None:
 
     assert "function handleWallElevationDragStart" in html
     assert "drag.kind === 'wall-elevation-item'" in html
-    assert "snapValue(roomPt.x - drag.offsetX)" in html
+    assert "applyDragSnap({" in html
+    assert "item.mountHeight_mm = snapped.y" in html
 
 
 def test_room_survey_updates_svg_orientation_attribute() -> None:
@@ -250,17 +269,6 @@ def test_fps_viewer_imports_shared_movement_controller() -> None:
     assert "fpv_movement_controller.js" in html
     assert "createMovementController" in html
     assert "movementController.step" in html
-
-
-def test_room_survey_exposes_wall_mount_height_controls() -> None:
-    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
-        encoding="utf-8"
-    )
-
-    assert 'id="wallItemControls"' in html
-    assert 'id="wallItemMountHeight"' in html
-    assert 'id="wallItemMountHeightSlider"' in html
-    assert "function updateWallItemControls" in html
 
 
 def test_room_survey_exports_unclamped_cable_points() -> None:

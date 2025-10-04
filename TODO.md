@@ -1,5 +1,10 @@
 TEST -- using AGENTS.md file
 # TODO
+✅ [p1] Restore wall elevation drag snapping to match the floor snap pipeline and retire the legacy mount height panel.
+  - [x] Audit wall tab drag handlers to find where snap increments diverge from floor logic and note reuse opportunities.
+  - [x] Refactor wall drag interactions to reuse the shared snap utility so vertical moves quantize to snap spacing and emit HUD feedback.
+  - [x] Remove or hide the "Wall Item Details" height panel when drag snapping is active, guarding with tests for both behaviors.
+  - [x] Add regression coverage verifying wall-mounted items drag-snap to expected heights and HUD updates show snap increments.
 ✅ [p2] Extend regression tests to cover importing a saved layout and switching between orientation tabs without losing state.
   - [x] Capture a layout export fixture containing floor and wall placements plus cables.
   - [x] Write a survey store test that loads the fixture, flips tabs, and asserts selection/cable context persists.

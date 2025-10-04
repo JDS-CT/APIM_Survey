@@ -141,6 +141,28 @@ def test_room_survey_exposes_orientation_tabs() -> None:
     assert 'id="viewSelectedWall"' in html
 
 
+def test_room_survey_provides_wall_elevation_and_scale_overlay() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="wallElevationLayer"' in html
+    assert 'id="scaleOverlay"' in html
+    assert "function renderWallOrientation()" in html
+    assert "function renderScaleOverlay()" in html
+    assert "const DOOR_ELEVATION_HEIGHT_MM" in html
+    assert "const SCALE_OVERLAY_CONFIG" in html
+
+
+def test_room_survey_updates_svg_orientation_attribute() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "svg.setAttribute('data-orientation'" in html
+    assert "function setOrientation(" in html
+
+
 def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
     html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
         encoding="utf-8"
@@ -151,3 +173,16 @@ def test_fps_viewer_includes_cable_catalog_and_mesh_refresh() -> None:
     assert "normalizeCableCatalogWithDefaults" in html
     assert "async function refreshCableMeshes" in html
     assert "const CABLE_SAMPLE_SEGMENTS" in html
+
+
+def test_fps_viewer_uses_human_scale_height_and_markers() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const ROOM_HEIGHT_MM = 3000" in html
+    assert "const scaleMarkerGroup" in html
+    assert "function buildScaleMarkers" in html
+    assert "function createLabelSprite" in html
+    assert "const HUMAN_EYE_HEIGHT_M" in html
+    assert "camera.position.set(0, HUMAN_EYE_HEIGHT_M, 5);" in html

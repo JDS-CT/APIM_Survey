@@ -1,4 +1,18 @@
+
 # Changelog
+
+## 2025-10-06T05:30:00Z
+- fix: complete step [p1] Wire orientation tab clicks to update the SVG data attribute so wall and ceiling projections replace the floor plan without losing selection context.
+- feat: complete step [p2] Gate the survey scale overlay behind a config flag and documentable tests so rulers render without blocking interactions.
+- docs: Refine the design-principles Q&A to emphasize custom notes, follow-up integration, and sensor context.
+- test: Extend markup assertions to cover the SVG orientation attribute setter and the FPV human eye-height constant.
+
+## 2025-10-06T00:00:00Z
+- feat: complete step [p2] Synchronize the orientation tabs with layout state and add wall elevation rendering so switching tabs updates projections without losing context.
+- feat: complete step [p2] Add scale overlays to the 2D survey canvas so users can gauge room dimensions at a glance.
+- feat: complete step [p2] Align FPV measurements with survey units, raise the camera to human height, and introduce floor/vertical scale markers for spatial context.
+- docs: Capture design principles explaining why the web survey exists alongside FreeCAD reference flows.
+- test: Extend markup coverage for the orientation elevation overlays and FPV scale helpers.
 
 ## 2025-10-05T12:30:00Z
 - feat: complete step [p2] Add tabbed orientation controls above the 2D survey canvas for floor, wall, ceiling, and custom wall views with a View Selected shortcut tied to the existing wall selector.
@@ -135,3 +149,10 @@
 - feat: complete step [p1] Stand up a minimal Python HTTP server – added a threaded standard-library server with JSON persistence endpoints and tests.
 - feat: complete step [p2] Apply shared glass-light dark theme tokens – overhauled the orbit viewer styling and background to match the suite’s dark treatment.
 - feat: complete step [p2] Persist layout data client-side – synced localStorage restores with imports and automatic saves when the viewer loads or updates.
+# Changelog
+
+## 2025-10-06T05:30:00Z
+- fix: complete step [p1] Wire orientation tab clicks to update the SVG data attribute so wall and ceiling projections replace the floor plan without losing selection context.
+- feat: complete step [p2] Gate the survey scale overlay behind a config flag and documentable tests so rulers render without blocking interactions.
+- docs: Refine the design-principles Q&A to emphasize custom notes, follow-up integration, and sensor context.
+- test: Extend markup assertions to cover the SVG orientation attribute setter and the FPV human eye-height constant.

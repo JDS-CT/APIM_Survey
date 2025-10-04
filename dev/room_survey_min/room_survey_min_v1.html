@@ -237,6 +237,78 @@
       flex-wrap: wrap;
       gap: 12px;
     }
+    #wallElevationLayer,
+    #scaleOverlay {
+      pointer-events: none;
+    }
+    #scaleOverlay text {
+      font-size: 12px;
+      font-weight: 600;
+      fill: #0f172a;
+      paint-order: stroke;
+      stroke: rgba(255, 255, 255, 0.65);
+      stroke-width: 2px;
+    }
+    .scale-bar-line { stroke: #0f172a; stroke-width: 2; }
+    .scale-bar-tick { stroke: #0f172a; stroke-width: 2; }
+    .scale-bar-label { dominant-baseline: hanging; }
+    svg[data-orientation="ceiling"] #floorItems { opacity: 0.35; }
+    svg[data-orientation="wall"] #grid,
+    svg[data-orientation="wall"] #origin,
+    svg[data-orientation="wall"] #originLabel,
+    svg[data-orientation="wall"] #baseWallsOverlay,
+    svg[data-orientation="wall"] #wallLabels,
+    svg[data-orientation="wall"] #selectionOverlay,
+    svg[data-orientation="wall"] #customWalls,
+    svg[data-orientation="wall"] #doorsLayer,
+    svg[data-orientation="wall"] #floorItems,
+    svg[data-orientation="wall"] #wallItems {
+      display: none;
+    }
+    #wallElevationLayer { display: none; }
+    svg[data-orientation="wall"] #wallElevationLayer { display: block; }
+    svg[data-orientation="wall"] #roomRect {
+      fill: rgba(148, 163, 184, 0.12);
+      stroke: rgba(30, 41, 59, 0.55);
+      stroke-width: 2;
+    }
+    .wall-elevation-backdrop {
+      fill: rgba(226, 232, 240, 0.4);
+      stroke: rgba(71, 85, 105, 0.4);
+      stroke-width: 1;
+    }
+    .wall-elevation-backdrop[data-selected="true"] {
+      stroke: #2563eb;
+      stroke-width: 2;
+    }
+    .wall-elevation-axis { stroke: rgba(15, 23, 42, 0.55); stroke-width: 2; }
+    .wall-elevation-axis[data-kind="ceiling"] { stroke-dasharray: 8 6; opacity: 0.7; }
+    .wall-elevation-door {
+      fill: rgba(37, 99, 235, 0.15);
+      stroke: #1e88e5;
+      stroke-width: 2;
+    }
+    .wall-elevation-door[data-selected="true"] { stroke-width: 3; }
+    .wall-elevation-item rect {
+      fill-opacity: 0.9;
+      stroke-width: 2;
+    }
+    .wall-elevation-item[data-selected="true"] rect {
+      stroke: #1976d2;
+      stroke-width: 3;
+    }
+    .wall-elevation-item text {
+      font-size: 11px;
+      fill: #0f172a;
+      paint-order: stroke;
+      stroke: rgba(255, 255, 255, 0.6);
+      stroke-width: 3px;
+    }
+    .wall-elevation-height {
+      stroke: rgba(15, 23, 42, 0.45);
+      stroke-dasharray: 4 4;
+      stroke-width: 2;
+    }
   </style>
 </head>
 <body data-room-theme="glass-dark">
@@ -332,7 +404,7 @@
               <rect id="roomRect" x="50" y="50" width="700" height="500" fill="none" stroke="#333" stroke-width="2"/>
               <!-- Origin marker (rear-left corner) -->
               <circle id="origin" cx="50" cy="550" r="5" fill="#d33"></circle>
-              <text x="60" y="545" font-size="12">Origin (0,0)</text>
+              <text id="originLabel" x="60" y="545" font-size="12">Origin (0,0)</text>
               <!-- grid group -->
               <g id="grid"></g>
             </g>
@@ -345,6 +417,8 @@
             <g id="doorsLayer"></g>
             <g id="floorItems"></g>
             <g id="wallItems"></g>
+            <g id="wallElevationLayer"></g>
+            <g id="scaleOverlay"></g>
           </svg>
         </div>
       </div>
@@ -383,6 +457,7 @@ const orientationButtons = orientationTabsEl
 
 const roomRect = document.getElementById('roomRect');
 const originDot = document.getElementById('origin');
+const originLabel = document.getElementById('originLabel');
 const gridG = document.getElementById('grid');
 const baseWallsG = document.getElementById('baseWallsOverlay');
 const wallLabelsG = document.getElementById('wallLabels');
@@ -391,6 +466,8 @@ const customWallsG = document.getElementById('customWalls');
 const doorsG = document.getElementById('doorsLayer');
 const floorItemsG = document.getElementById('floorItems');
 const wallItemsG = document.getElementById('wallItems');
+const wallElevationLayer = document.getElementById('wallElevationLayer');
+const scaleOverlayG = document.getElementById('scaleOverlay');
 
 const LAYOUT_STORAGE_KEY = 'apim-room.latest-layout';
 const LAYOUT_PERSIST_DELAY_MS = 240;
@@ -415,6 +492,7 @@ const WALL_ITEM_DEFS = {
     stroke: '#aa7a00',
     assetKey: 'wall_socket',
     defaultDepth: 300,
+    mountHeightMm: 1200,
     depthDirections: [1],
     fallbackSockets: [
       {
@@ -434,6 +512,7 @@ const WALL_ITEM_DEFS = {
     stroke: '#15803d',
     assetKey: 'wall_gas_socket',
     defaultDepth: 300,
+    mountHeightMm: 1400,
     depthDirections: [1],
     fallbackSockets: [
       {
@@ -453,6 +532,7 @@ const WALL_ITEM_DEFS = {
     stroke: '#0369a1',
     assetKey: 'wall_feedthrough',
     defaultDepth: 200,
+    mountHeightMm: 1300,
     depthDirections: [1, -1],
     fallbackSockets: [
       {
@@ -500,6 +580,8 @@ const DEFAULT_ROOM_PRESET = () => ({
 const BASE_WALL_THICKNESS = 200;
 const DOOR_DEFAULT_WIDTH = 900;
 const DOOR_DEFAULT_THICKNESS = 80;
+const DOOR_ELEVATION_HEIGHT_MM = 2100;
+const SCALE_OVERLAY_CONFIG = { enabled: true };
 
 let idCounter = 1;
 let suppressPersist = false;
@@ -523,7 +605,15 @@ const state = {
   doors: [],
   cables: [],
   selectedSurface: { type: 'floor' },
-  orientation: { type: 'floor' }
+  orientation: { type: 'floor' },
+  view: {
+    type: 'floor',
+    widthMm: 6000,
+    heightMm: 8000,
+    originX: 50,
+    originY: 50,
+    wallGeom: null
+  }
 };
 
 let hudTransient = null;
@@ -601,13 +691,26 @@ function normalizeWallItemFromLayout(item) {
   if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
   if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
   const depth = item.h !== undefined ? item.h : def.defaultDepth;
-  return {
+  const mountHeightSource =
+    item.mount_height_mm !== undefined ? item.mount_height_mm
+    : item.mountHeight_mm !== undefined ? item.mountHeight_mm
+    : item.mount_height !== undefined ? item.mount_height
+    : item.mountHeight !== undefined ? item.mountHeight
+      : undefined;
+  const fallbackMount = def.mountHeightMm !== undefined ? def.mountHeightMm : 1200;
+  const normalized = {
     id,
     type,
     wall: wallRef || 'base:1',
     s: toNumber(item.s, 0),
     h: toNumber(depth, def.defaultDepth)
   };
+  if (mountHeightSource !== undefined) {
+    normalized.mountHeight_mm = toNumber(mountHeightSource, fallbackMount);
+  } else if (def.mountHeightMm !== undefined) {
+    normalized.mountHeight_mm = def.mountHeightMm;
+  }
+  return normalized;
 }
 
 function normalizeCustomWallFromLayout(wall) {
@@ -682,13 +785,19 @@ function snapshotLayout() {
       }
       return snapshot;
     }),
-    wall_items: state.wallItems.map(item => ({
-      id: item.id,
-      type: item.type,
-      wall: item.wall,
-      s: Math.round(item.s || 0),
-      h: Math.round(item.h || 0)
-    })),
+    wall_items: state.wallItems.map(item => {
+      const snapshot = {
+        id: item.id,
+        type: item.type,
+        wall: item.wall,
+        s: Math.round(item.s || 0),
+        h: Math.round(item.h || 0)
+      };
+      if (item.mountHeight_mm !== undefined) {
+        snapshot.mount_height_mm = Math.round(item.mountHeight_mm);
+      }
+      return snapshot;
+    }),
     custom_walls: state.customWalls.map(wall => ({
       id: wall.id,
       name: wall.name,
@@ -945,6 +1054,9 @@ function resnapAll() {
     if (WALL_ITEM_DEFS[item.type]) {
       if (typeof item.s === 'number') item.s = snapValue(item.s);
       if (typeof item.h === 'number') item.h = snapValue(item.h);
+      if (typeof item.mountHeight_mm === 'number') {
+        item.mountHeight_mm = snapValue(item.mountHeight_mm);
+      }
     }
   });
   state.customWalls.forEach(wall => {
@@ -960,55 +1072,179 @@ function resnapAll() {
 }
 
 function recomputeScale() {
-  const maxWpx = 800, maxLpx = 520;
-  const sx = maxWpx / state.Wmm;
-  const sy = maxLpx / state.Lmm;
-  state.scale = Math.min(sx, sy);
-  const wpx = state.Wmm * state.scale;
-  const lpx = state.Lmm * state.scale;
+  const maxWpx = 800;
+  const maxHpx = 520;
+  const type = orientationType();
+  if (isWallOrientation()) {
+    let geom = getWallGeometry(state.orientation?.ref);
+    if (!geom) {
+      const fallback = listAllWalls()[0] || null;
+      if (fallback) {
+        state.orientation = { type: 'wall', ref: fallback.ref };
+        geom = fallback;
+      }
+    }
+    if (!geom) {
+      state.orientation = { type: 'floor' };
+      return recomputeScale();
+    }
+    const widthMm = Math.max(geom.length, 1);
+    const heightMm = DEFAULT_ROOM_HEIGHT_MM;
+    const sx = maxWpx / widthMm;
+    const sy = maxHpx / heightMm;
+    state.scale = Math.max(Math.min(sx, sy), 0.01);
+    const wpx = widthMm * state.scale;
+    const hpx = heightMm * state.scale;
+    const x0 = 50;
+    const y0 = 570 - hpx;
+    roomRect.setAttribute('width', wpx);
+    roomRect.setAttribute('height', hpx);
+    roomRect.setAttribute('x', x0);
+    roomRect.setAttribute('y', y0);
+    originDot.setAttribute('cx', x0);
+    originDot.setAttribute('cy', y0 + hpx);
+    if (originLabel) {
+      originLabel.setAttribute('x', x0 + 10);
+      originLabel.setAttribute('y', y0 + hpx - 12);
+      originLabel.textContent = 'Floor (0 mm)';
+    }
+    state.view = {
+      type,
+      widthMm,
+      heightMm,
+      originX: x0,
+      originY: y0,
+      wallGeom: geom
+    };
+    drawGrid();
+    return;
+  }
+
+  const widthMm = Math.max(state.Wmm, 1);
+  const heightMm = Math.max(state.Lmm, 1);
+  const sx = maxWpx / widthMm;
+  const sy = maxHpx / heightMm;
+  state.scale = Math.max(Math.min(sx, sy), 0.01);
+  const wpx = widthMm * state.scale;
+  const hpx = heightMm * state.scale;
   const x0 = 50;
-  const y0 = 570 - lpx;
+  const y0 = 570 - hpx;
   roomRect.setAttribute('width', wpx);
-  roomRect.setAttribute('height', lpx);
+  roomRect.setAttribute('height', hpx);
   roomRect.setAttribute('x', x0);
   roomRect.setAttribute('y', y0);
   originDot.setAttribute('cx', x0);
   originDot.setAttribute('cy', 570);
+  if (originLabel) {
+    originLabel.setAttribute('x', x0 + 10);
+    originLabel.setAttribute('y', 545);
+    originLabel.textContent = 'Origin (0,0)';
+  }
+  state.view = {
+    type,
+    widthMm,
+    heightMm,
+    originX: x0,
+    originY: y0,
+    wallGeom: null
+  };
   drawGrid();
 }
 
 function drawGrid() {
+  if (isWallOrientation()) {
+    drawWallGrid();
+  } else {
+    drawPlanGrid();
+  }
+}
+
+function drawPlanGrid() {
   gridG.innerHTML = '';
   const step = state.snap;
-  const x0 = Number(roomRect.getAttribute('x'));
-  const y0 = Number(roomRect.getAttribute('y'));
-  const wpx = Number(roomRect.getAttribute('width'));
-  const lpx = Number(roomRect.getAttribute('height'));
   if (step <= 0) return;
+  const view = state.view;
+  const x0 = view ? view.originX : Number(roomRect.getAttribute('x'));
+  const y0 = view ? view.originY : Number(roomRect.getAttribute('y'));
+  const wpx = Number(roomRect.getAttribute('width'));
+  const hpx = Number(roomRect.getAttribute('height'));
   for (let xmm = 0; xmm <= state.Wmm; xmm += step) {
     const x = x0 + xmm * state.scale;
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x); line.setAttribute('y1', y0);
-    line.setAttribute('x2', x); line.setAttribute('y2', y0 + lpx);
-    line.setAttribute('stroke', '#ddd'); line.setAttribute('stroke-width', 1);
+    line.setAttribute('x1', x);
+    line.setAttribute('y1', y0);
+    line.setAttribute('x2', x);
+    line.setAttribute('y2', y0 + hpx);
+    line.setAttribute('stroke', '#ddd');
+    line.setAttribute('stroke-width', 1);
     gridG.appendChild(line);
   }
   for (let ymm = 0; ymm <= state.Lmm; ymm += step) {
     const y = y0 + (state.Lmm - ymm) * state.scale;
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x0); line.setAttribute('y1', y);
-    line.setAttribute('x2', x0 + wpx); line.setAttribute('y2', y);
-    line.setAttribute('stroke', '#eee'); line.setAttribute('stroke-width', 1);
+    line.setAttribute('x1', x0);
+    line.setAttribute('y1', y);
+    line.setAttribute('x2', x0 + wpx);
+    line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#eee');
+    line.setAttribute('stroke-width', 1);
+    gridG.appendChild(line);
+  }
+}
+
+function drawWallGrid() {
+  gridG.innerHTML = '';
+  const view = state.view;
+  if (!view || view.type !== 'wall') return;
+  const x0 = view.originX;
+  const y0 = view.originY;
+  const widthPx = Number(roomRect.getAttribute('width'));
+  const heightPx = Number(roomRect.getAttribute('height'));
+  const horizontalStep = state.snap > 0 ? state.snap : 100;
+  const verticalStep = 300;
+  for (let xmm = 0; xmm <= view.widthMm; xmm += horizontalStep) {
+    const x = x0 + xmm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x);
+    line.setAttribute('y1', y0);
+    line.setAttribute('x2', x);
+    line.setAttribute('y2', y0 + heightPx);
+    line.setAttribute('stroke', '#d4d4d8');
+    line.setAttribute('stroke-width', xmm % (horizontalStep * 5) === 0 ? 1.5 : 1);
+    gridG.appendChild(line);
+  }
+  for (let zmm = 0; zmm <= view.heightMm; zmm += verticalStep) {
+    const y = y0 + heightPx - zmm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x0);
+    line.setAttribute('y1', y);
+    line.setAttribute('x2', x0 + widthPx);
+    line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#e2e8f0');
+    line.setAttribute('stroke-width', zmm % (verticalStep * 2) === 0 ? 1.5 : 1);
     gridG.appendChild(line);
   }
 }
 
 function mmToPx(xmm, ymm) {
-  const x0 = Number(roomRect.getAttribute('x'));
-  const y0 = Number(roomRect.getAttribute('y'));
-  const px = x0 + xmm * state.scale;
-  const py = y0 + (state.Lmm - ymm) * state.scale;
+  const view = state.view;
+  if (!view) return [0, 0];
+  if (view.type === 'wall') {
+    return wallMmToPx(xmm, ymm);
+  }
+  const px = view.originX + xmm * state.scale;
+  const py = view.originY + (view.heightMm - ymm) * state.scale;
   return [px, py];
+}
+
+function wallMmToPx(offsetMm, heightMm) {
+  const view = state.view;
+  if (!view || view.type !== 'wall') return [0, 0];
+  const clampedOffset = clamp(offsetMm, 0, view.widthMm);
+  const clampedHeight = clamp(heightMm, 0, view.heightMm);
+  const x = view.originX + clampedOffset * state.scale;
+  const y = view.originY + (view.heightMm - clampedHeight) * state.scale;
+  return [x, y];
 }
 
 function svgPoint(evt) {
@@ -1019,14 +1255,29 @@ function svgPoint(evt) {
 }
 
 function svgPointToRoomMm(pt) {
-  const x0 = Number(roomRect.getAttribute('x'));
-  const y0 = Number(roomRect.getAttribute('y'));
+  const view = state.view;
+  if (!view) return { x: 0, y: 0 };
+  const x0 = view.originX;
+  const y0 = view.originY;
+  if (view.type === 'wall') {
+    const offset = (pt.x - x0) / state.scale;
+    const height = view.heightMm - ((pt.y - y0) / state.scale);
+    return { x: offset, y: height };
+  }
   const xmm = (pt.x - x0) / state.scale;
-  const ymm = state.Lmm - ((pt.y - y0) / state.scale);
+  const ymm = view.heightMm - ((pt.y - y0) / state.scale);
   return { x: xmm, y: ymm };
 }
 
 function clampPointToRoom(pt) {
+  if (isWallOrientation()) {
+    const view = state.view;
+    if (!view) return pt;
+    return {
+      x: clamp(pt.x, 0, view.widthMm),
+      y: clamp(pt.y, 0, view.heightMm)
+    };
+  }
   return {
     x: clamp(pt.x, 0, state.Wmm),
     y: clamp(pt.y, 0, state.Lmm)
@@ -1093,6 +1344,19 @@ function listAllWalls() {
     thickness: w.thickness || BASE_WALL_THICKNESS
   }));
   return [...base, ...customs].map(enrichWallGeometry).filter(Boolean);
+}
+
+function orientationType() {
+  return state.orientation && state.orientation.type ? state.orientation.type : 'floor';
+}
+
+function isPlanViewActive() {
+  const type = orientationType();
+  return type === 'floor' || type === 'ceiling';
+}
+
+function isWallOrientation() {
+  return orientationType() === 'wall';
 }
 
 function parseOrientationKey(key) {
@@ -1166,9 +1430,17 @@ function updateOrientationActiveState() {
   }
 }
 
-function setOrientation(key, { announce = false } = {}) {
+function setOrientation(key, { announce = false, skipRender = false } = {}) {
   state.orientation = parseOrientationKey(key);
-  updateOrientationActiveState();
+  drag = null;
+  drawWallState = null;
+  recomputeScale();
+  if (skipRender) {
+    updateOrientationActiveState();
+    renderScaleOverlay();
+  } else {
+    render();
+  }
   if (announce && hud) {
     const message = describeOrientation(state.orientation);
     hud.textContent = message;
@@ -1245,7 +1517,7 @@ function setMode(mode) {
   roomTypeSel.value = mode;
   if (mode === 'basic') {
     state.selectedSurface = { type: 'floor' };
-    setOrientation('floor');
+    setOrientation('floor', { skipRender: true });
   }
   if (mode !== 'custom') {
     drawWallState = null;
@@ -1281,6 +1553,9 @@ function clampStateToRoom() {
     if (!geom) return;
     it.s = clamp(it.s, 0, geom.length);
     it.h = clamp(it.h, 0, 4000);
+    if (typeof it.mountHeight_mm === 'number') {
+      it.mountHeight_mm = clamp(it.mountHeight_mm, 0, DEFAULT_ROOM_HEIGHT_MM);
+    }
   });
   state.doors.forEach(door => {
     const geom = getWallGeometry(door.wall);
@@ -1321,6 +1596,27 @@ function defaultHudMessage() {
 
 function render() {
   updateWallSelect();
+  const type = orientationType();
+  if (svg) {
+    svg.dataset.orientation = type;
+    svg.setAttribute('data-orientation', type);
+  }
+  if (isWallOrientation()) {
+    renderWallOrientation();
+  } else {
+    renderPlanOrientation();
+  }
+  updateOrientationActiveState();
+  renderScaleOverlay();
+  hud.textContent = hudTransient || defaultHudMessage();
+  hudTransient = null;
+  maybePersistLayout();
+}
+
+function renderPlanOrientation() {
+  if (wallElevationLayer) {
+    wallElevationLayer.innerHTML = '';
+  }
   renderBaseWallsOverlay();
   renderWallLabels();
   renderCustomWalls();
@@ -1328,10 +1624,362 @@ function render() {
   renderWallItems();
   renderFloorItems();
   renderSelection();
-  updateOrientationActiveState();
-  hud.textContent = hudTransient || defaultHudMessage();
-  hudTransient = null;
-  maybePersistLayout();
+}
+
+function renderWallOrientation() {
+  if (!wallElevationLayer) return;
+  wallElevationLayer.innerHTML = '';
+  delete svg.dataset.ceilingView;
+  const view = state.view;
+  const geom = view && view.wallGeom ? view.wallGeom : null;
+  const widthPx = Number(roomRect.getAttribute('width')) || 0;
+  const heightPx = Number(roomRect.getAttribute('height')) || 0;
+  const x0 = view ? view.originX : Number(roomRect.getAttribute('x'));
+  const y0 = view ? view.originY : Number(roomRect.getAttribute('y'));
+
+  if (!geom) {
+    const fallback = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    fallback.setAttribute('x', x0 + widthPx / 2);
+    fallback.setAttribute('y', y0 + heightPx / 2);
+    fallback.setAttribute('text-anchor', 'middle');
+    fallback.setAttribute('font-size', 16);
+    fallback.setAttribute('fill', '#0f172a');
+    fallback.textContent = 'Select a wall to preview elevation.';
+    wallElevationLayer.appendChild(fallback);
+    return;
+  }
+
+  const backdrop = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  backdrop.setAttribute('x', x0);
+  backdrop.setAttribute('y', y0);
+  backdrop.setAttribute('width', widthPx);
+  backdrop.setAttribute('height', heightPx);
+  backdrop.classList.add('wall-elevation-backdrop');
+  if (state.selectedSurface?.type === 'wall' && state.selectedSurface.ref === geom.ref) {
+    backdrop.dataset.selected = 'true';
+  }
+  wallElevationLayer.appendChild(backdrop);
+
+  const floorLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  floorLine.setAttribute('x1', x0);
+  floorLine.setAttribute('y1', y0 + heightPx);
+  floorLine.setAttribute('x2', x0 + widthPx);
+  floorLine.setAttribute('y2', y0 + heightPx);
+  floorLine.classList.add('wall-elevation-axis');
+  floorLine.dataset.kind = 'floor';
+  wallElevationLayer.appendChild(floorLine);
+
+  const ceilingLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  ceilingLine.setAttribute('x1', x0);
+  ceilingLine.setAttribute('y1', y0);
+  ceilingLine.setAttribute('x2', x0 + widthPx);
+  ceilingLine.setAttribute('y2', y0);
+  ceilingLine.classList.add('wall-elevation-axis');
+  ceilingLine.dataset.kind = 'ceiling';
+  wallElevationLayer.appendChild(ceilingLine);
+
+  const wallLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  wallLabel.setAttribute('x', x0 + widthPx / 2);
+  wallLabel.setAttribute('y', Math.max(28, y0 - 10));
+  wallLabel.setAttribute('text-anchor', 'middle');
+  wallLabel.setAttribute('font-size', 16);
+  wallLabel.setAttribute('font-weight', '600');
+  wallLabel.setAttribute('fill', '#0f172a');
+  wallLabel.textContent = geom.label || 'Wall Elevation';
+  wallElevationLayer.appendChild(wallLabel);
+
+  const ceilingLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  ceilingLabel.setAttribute('x', x0 + widthPx + 8);
+  ceilingLabel.setAttribute('y', y0 + 14);
+  ceilingLabel.setAttribute('font-size', 11);
+  ceilingLabel.setAttribute('fill', '#334155');
+  ceilingLabel.textContent = fmtLen(view.heightMm || DEFAULT_ROOM_HEIGHT_MM);
+  wallElevationLayer.appendChild(ceilingLabel);
+
+  const doorHeightMm = Math.min(DOOR_ELEVATION_HEIGHT_MM, view.heightMm || DEFAULT_ROOM_HEIGHT_MM);
+  state.doors
+    .filter(door => door.wall === geom.ref)
+    .forEach(door => {
+      const maxOffset = Math.max(0, geom.length - door.width);
+      const offset = clamp(door.offset, 0, maxOffset);
+      const doorWidthPx = Math.min(door.width, view.widthMm) * state.scale;
+      const doorX = x0 + offset * state.scale;
+      const doorY = y0 + heightPx - doorHeightMm * state.scale;
+      const doorRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      doorRect.setAttribute('x', doorX);
+      doorRect.setAttribute('y', doorY);
+      doorRect.setAttribute('width', doorWidthPx);
+      doorRect.setAttribute('height', doorHeightMm * state.scale);
+      doorRect.classList.add('wall-elevation-door');
+      if (state.selectedSurface?.type === 'door' && state.selectedSurface.id === door.id) {
+        doorRect.dataset.selected = 'true';
+      }
+      wallElevationLayer.appendChild(doorRect);
+
+      const doorLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      doorLabel.setAttribute('x', doorX + doorWidthPx / 2);
+      doorLabel.setAttribute('y', Math.max(y0 + 16, doorY - 8));
+      doorLabel.setAttribute('text-anchor', 'middle');
+      doorLabel.setAttribute('font-size', 11);
+      doorLabel.setAttribute('fill', '#1f2937');
+      doorLabel.textContent = `Door · ${fmtLen(door.width)}`;
+      wallElevationLayer.appendChild(doorLabel);
+    });
+
+  const items = state.wallItems.filter(it => it.wall === geom.ref);
+  items.forEach(item => {
+    const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+    const mountHeight = clamp(
+      typeof item.mountHeight_mm === 'number'
+        ? item.mountHeight_mm
+        : def.mountHeightMm !== undefined
+          ? def.mountHeightMm
+          : 1200,
+      0,
+      view.heightMm || DEFAULT_ROOM_HEIGHT_MM
+    );
+    const basePt = wallMmToPx(item.s, 0);
+    const mountPt = wallMmToPx(item.s, mountHeight);
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.classList.add('wall-elevation-item');
+    const isSelected = state.selectedSurface?.type === 'wallItem' && state.selectedSurface.id === item.id;
+    if (isSelected) {
+      group.dataset.selected = 'true';
+    }
+
+    const stem = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    stem.setAttribute('x1', basePt[0]);
+    stem.setAttribute('y1', basePt[1]);
+    stem.setAttribute('x2', mountPt[0]);
+    stem.setAttribute('y2', mountPt[1]);
+    stem.classList.add('wall-elevation-height');
+    group.appendChild(stem);
+
+    const size = 32;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', mountPt[0] - size / 2);
+    rect.setAttribute('y', mountPt[1] - size / 2);
+    rect.setAttribute('width', size);
+    rect.setAttribute('height', size);
+    rect.setAttribute('rx', 6);
+    rect.setAttribute('fill', def.fill);
+    rect.setAttribute('stroke', def.stroke);
+    group.appendChild(rect);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', mountPt[0]);
+    label.setAttribute('y', mountPt[1] + size / 2 + 14);
+    label.setAttribute('text-anchor', 'middle');
+    label.textContent = def.label;
+    group.appendChild(label);
+
+    const heightLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    heightLabel.setAttribute('x', mountPt[0] + size / 2 + 6);
+    heightLabel.setAttribute('y', mountPt[1] - size / 2);
+    heightLabel.setAttribute('font-size', 11);
+    heightLabel.setAttribute('fill', '#1e293b');
+    heightLabel.textContent = fmtLen(mountHeight);
+    group.appendChild(heightLabel);
+
+    wallElevationLayer.appendChild(group);
+  });
+
+  if (items.length === 0 && state.doors.every(door => door.wall !== geom.ref)) {
+    const hint = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    hint.setAttribute('x', x0 + widthPx / 2);
+    hint.setAttribute('y', y0 + heightPx / 2);
+    hint.setAttribute('text-anchor', 'middle');
+    hint.setAttribute('font-size', 13);
+    hint.setAttribute('fill', '#475569');
+    hint.textContent = 'No wall items on this elevation yet.';
+    wallElevationLayer.appendChild(hint);
+  }
+}
+
+function renderScaleOverlay() {
+  if (!scaleOverlayG) return;
+  if (!SCALE_OVERLAY_CONFIG.enabled) return;
+  scaleOverlayG.innerHTML = '';
+  const view = state.view;
+  if (!view) return;
+  if (isWallOrientation()) {
+    renderWallScaleOverlay(view);
+  } else {
+    renderPlanScaleOverlay(view);
+  }
+}
+
+function renderPlanScaleOverlay(view) {
+  const horizontalMm = chooseScaleLengthMm(view.widthMm, state.scale, { snapHint: state.snap });
+  const verticalMm = chooseScaleLengthMm(view.heightMm, state.scale, { snapHint: state.snap });
+  const baselineY = Math.min(610, view.originY + view.heightMm * state.scale + 32);
+  const startX = view.originX;
+  if (horizontalMm > 0) {
+    const widthPx = horizontalMm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', startX);
+    line.setAttribute('y1', baselineY);
+    line.setAttribute('x2', startX + widthPx);
+    line.setAttribute('y2', baselineY);
+    line.classList.add('scale-bar-line');
+    scaleOverlayG.appendChild(line);
+
+    const leftTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    leftTick.setAttribute('x1', startX);
+    leftTick.setAttribute('y1', baselineY - 6);
+    leftTick.setAttribute('x2', startX);
+    leftTick.setAttribute('y2', baselineY + 6);
+    leftTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(leftTick);
+
+    const rightTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    rightTick.setAttribute('x1', startX + widthPx);
+    rightTick.setAttribute('y1', baselineY - 6);
+    rightTick.setAttribute('x2', startX + widthPx);
+    rightTick.setAttribute('y2', baselineY + 6);
+    rightTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(rightTick);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', startX + widthPx / 2);
+    label.setAttribute('y', baselineY + 10);
+    label.setAttribute('text-anchor', 'middle');
+    label.classList.add('scale-bar-label');
+    label.textContent = fmtLen(horizontalMm);
+    scaleOverlayG.appendChild(label);
+  }
+
+  if (verticalMm > 0) {
+    const heightPx = verticalMm * state.scale;
+    const baseX = Math.max(32, view.originX - 36);
+    const bottomY = view.originY + view.heightMm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', baseX);
+    line.setAttribute('y1', bottomY);
+    line.setAttribute('x2', baseX);
+    line.setAttribute('y2', bottomY - heightPx);
+    line.classList.add('scale-bar-line');
+    scaleOverlayG.appendChild(line);
+
+    const bottomTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    bottomTick.setAttribute('x1', baseX - 6);
+    bottomTick.setAttribute('y1', bottomY);
+    bottomTick.setAttribute('x2', baseX + 6);
+    bottomTick.setAttribute('y2', bottomY);
+    bottomTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(bottomTick);
+
+    const topTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    topTick.setAttribute('x1', baseX - 6);
+    topTick.setAttribute('y1', bottomY - heightPx);
+    topTick.setAttribute('x2', baseX + 6);
+    topTick.setAttribute('y2', bottomY - heightPx);
+    topTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(topTick);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', baseX - 8);
+    label.setAttribute('y', bottomY - heightPx / 2);
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.textContent = fmtLen(verticalMm);
+    scaleOverlayG.appendChild(label);
+  }
+}
+
+function renderWallScaleOverlay(view) {
+  const horizontalMm = chooseScaleLengthMm(view.widthMm, state.scale, { snapHint: state.snap });
+  const verticalMm = chooseScaleLengthMm(view.heightMm, state.scale, { snapHint: 100 });
+  const baselineY = view.originY + view.heightMm * state.scale + 24;
+  const startX = view.originX;
+  if (horizontalMm > 0) {
+    const widthPx = horizontalMm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', startX);
+    line.setAttribute('y1', baselineY);
+    line.setAttribute('x2', startX + widthPx);
+    line.setAttribute('y2', baselineY);
+    line.classList.add('scale-bar-line');
+    scaleOverlayG.appendChild(line);
+
+    const leftTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    leftTick.setAttribute('x1', startX);
+    leftTick.setAttribute('y1', baselineY - 6);
+    leftTick.setAttribute('x2', startX);
+    leftTick.setAttribute('y2', baselineY + 6);
+    leftTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(leftTick);
+
+    const rightTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    rightTick.setAttribute('x1', startX + widthPx);
+    rightTick.setAttribute('y1', baselineY - 6);
+    rightTick.setAttribute('x2', startX + widthPx);
+    rightTick.setAttribute('y2', baselineY + 6);
+    rightTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(rightTick);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', startX + widthPx / 2);
+    label.setAttribute('y', baselineY + 12);
+    label.setAttribute('text-anchor', 'middle');
+    label.textContent = fmtLen(horizontalMm);
+    scaleOverlayG.appendChild(label);
+  }
+
+  if (verticalMm > 0) {
+    const heightPx = verticalMm * state.scale;
+    const baseX = Math.max(32, view.originX - 28);
+    const bottomY = view.originY + view.heightMm * state.scale;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', baseX);
+    line.setAttribute('y1', bottomY);
+    line.setAttribute('x2', baseX);
+    line.setAttribute('y2', bottomY - heightPx);
+    line.classList.add('scale-bar-line');
+    scaleOverlayG.appendChild(line);
+
+    const bottomTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    bottomTick.setAttribute('x1', baseX - 6);
+    bottomTick.setAttribute('y1', bottomY);
+    bottomTick.setAttribute('x2', baseX + 6);
+    bottomTick.setAttribute('y2', bottomY);
+    bottomTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(bottomTick);
+
+    const topTick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    topTick.setAttribute('x1', baseX - 6);
+    topTick.setAttribute('y1', bottomY - heightPx);
+    topTick.setAttribute('x2', baseX + 6);
+    topTick.setAttribute('y2', bottomY - heightPx);
+    topTick.classList.add('scale-bar-tick');
+    scaleOverlayG.appendChild(topTick);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', baseX - 8);
+    label.setAttribute('y', bottomY - heightPx / 2);
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.textContent = fmtLen(verticalMm);
+    scaleOverlayG.appendChild(label);
+  }
+}
+
+function chooseScaleLengthMm(availableMm, scale, { snapHint = 100, minPx = 80, maxPx = 220 } = {}) {
+  if (!Number.isFinite(availableMm) || availableMm <= 0) return 0;
+  if (!Number.isFinite(scale) || scale <= 0) return 0;
+  const snap = Math.max(10, snapHint || 10);
+  let length = snap;
+  while (length * scale < minPx && length < availableMm) {
+    length += snap;
+  }
+  while (length * scale > maxPx && length > snap) {
+    length -= snap;
+  }
+  if (length > availableMm) length = availableMm;
+  if (length * scale < minPx && availableMm * scale >= minPx) {
+    length = availableMm;
+  }
+  return length > 0 ? length : 0;
 }
 
 function renderBaseWallsOverlay() {
@@ -1590,6 +2238,7 @@ function renderFloorItems() {
 let drag = null;
 
 function handleFloorDragStart(evt) {
+  if (!isPlanViewActive()) return;
   const id = evt.currentTarget.dataset.floorItemId;
   const item = state.floorItems.find(f => f.id === id);
   if (!item) return;
@@ -1609,6 +2258,7 @@ function handleFloorDragStart(evt) {
 }
 
 function handleSocketAlongDragStart(evt) {
+  if (!isPlanViewActive()) return;
   const id = evt.currentTarget.dataset.wallItemId;
   const item = state.wallItems.find(w => w.id === id);
   if (!item) return;
@@ -1619,6 +2269,7 @@ function handleSocketAlongDragStart(evt) {
 }
 
 function handleSocketHeightDragStart(evt) {
+  if (!isPlanViewActive()) return;
   const id = evt.currentTarget.dataset.wallItemId;
   const item = state.wallItems.find(w => w.id === id);
   if (!item) return;
@@ -1629,6 +2280,7 @@ function handleSocketHeightDragStart(evt) {
 }
 
 function handleCustomWallLineDown(evt) {
+  if (!isPlanViewActive()) return;
   const wallId = evt.currentTarget.dataset.wallId;
   const wallRef = evt.currentTarget.dataset.wallRef;
   setSelectedSurface({ type: 'wall', ref: wallRef }, { skipRender: true });
@@ -1650,6 +2302,7 @@ function handleCustomWallLineDown(evt) {
 }
 
 function handleWallHandleDown(evt) {
+  if (!isPlanViewActive()) return;
   const wallId = evt.currentTarget.dataset.wallId;
   const handle = evt.currentTarget.dataset.handle;
   const wall = getCustomWallById(wallId);
@@ -1671,6 +2324,7 @@ function handleWallHandleDown(evt) {
 }
 
 function handleDoorDragStart(evt) {
+  if (!isPlanViewActive()) return;
   const id = evt.currentTarget.dataset.doorId;
   const door = state.doors.find(d => d.id === id);
   if (!door) return;
@@ -1682,6 +2336,7 @@ function handleDoorDragStart(evt) {
 
 document.addEventListener('pointermove', evt => {
   if (!drag) return;
+  if (!isPlanViewActive()) return;
   const pt = svgPoint(evt);
   const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
   if (drag.kind === 'floor') {
@@ -1830,6 +2485,7 @@ document.addEventListener('focusin', evt => {
 });
 
 svg.addEventListener('pointerdown', evt => {
+  if (!isPlanViewActive()) return;
   if (!drawWallState || state.mode !== 'custom') return;
   if (evt.target.closest('[data-floor-item-id],[data-wall-item-id],[data-door-id],[data-wall-id]')) return;
   const pt = svgPoint(evt);
@@ -1861,12 +2517,14 @@ svg.addEventListener('pointerdown', evt => {
 });
 
 svg.addEventListener('pointerdown', evt => {
+  if (!isPlanViewActive()) return;
   if (drawWallState && state.mode === 'custom') return;
   if (evt.target.closest('[data-floor-item-id],[data-wall-item-id],[data-door-id],[data-wall-id],[data-wall-ref]')) return;
   setSelectedSurface({ type: 'floor' });
 });
 
 roomRect.addEventListener('pointerdown', evt => {
+  if (!isPlanViewActive()) return;
   setSelectedSurface({ type: 'floor' });
   evt.preventDefault();
 });
@@ -1932,12 +2590,16 @@ addBtn.addEventListener('click', () => {
     }
     const s = snapValue(geom.length / 2);
     const depth = snapValue(def.defaultDepth);
+    const mountHeight = def.mountHeightMm !== undefined
+      ? snapValue(def.mountHeightMm)
+      : snapValue(1200);
     const item = {
       id: genId(def.idPrefix || 'wallItem'),
       type,
       wall: wallRef,
       s,
-      h: depth
+      h: depth,
+      mountHeight_mm: mountHeight
     };
     state.wallItems.push(item);
     setSelectedSurface({ type: 'wallItem', id: item.id });
@@ -2569,6 +3231,7 @@ function updateCableHud() {
 }
 
 function handleSocketPointerDown(evt) {
+  if (!isPlanViewActive()) return;
   const key = evt.currentTarget.dataset.socketKey;
   const socket = socketMap.get(key);
   if (!socket) return;
@@ -2615,6 +3278,7 @@ function handleSocketPointerLeave(evt) {
 }
 
 function handleCableHandleDown(evt) {
+  if (!isPlanViewActive()) return;
   const cableId = evt.currentTarget.dataset.cableId;
   const index = Number(evt.currentTarget.dataset.handleIndex || 0);
   const cable = state.cables.find(c => c.id === cableId);
@@ -2633,6 +3297,7 @@ function handleCableHandleDown(evt) {
 }
 
 function handleCableBendDown(evt) {
+  if (!isPlanViewActive()) return;
   const cableId = evt.currentTarget.dataset.cableId;
   const index = Number(evt.currentTarget.dataset.bendIndex || 0);
   const cable = state.cables.find(c => c.id === cableId);
@@ -2651,6 +3316,7 @@ function handleCableBendDown(evt) {
 }
 
 function handleCableBendDoubleClick(evt) {
+  if (!isPlanViewActive()) return;
   const cableId = evt.currentTarget.dataset.cableId;
   const index = Number(evt.currentTarget.dataset.bendIndex || 0);
   const cable = state.cables.find(c => c.id === cableId);
@@ -2668,6 +3334,11 @@ function handleCableBendDoubleClick(evt) {
 
 function renderSocketOverlay() {
   if (!socketOverlayEl) return;
+  if (!isPlanViewActive()) {
+    socketOverlayEl.innerHTML = '';
+    socketMap.clear();
+    return;
+  }
   socketOverlayEl.innerHTML = '';
   socketMap.clear();
   if (!cableCatalog) return;
@@ -2713,6 +3384,11 @@ function renderSocketOverlay() {
 
 function renderCables() {
   if (!cablesLayerEl) return;
+  if (!isPlanViewActive()) {
+    cablesLayerEl.innerHTML = '';
+    cableCurveCache.clear();
+    return;
+  }
   cablesLayerEl.innerHTML = '';
   cableCurveCache.clear();
   if (!Array.isArray(state.cables)) return;
@@ -2768,6 +3444,10 @@ function renderCables() {
 
 function renderCableHandles() {
   if (!cableHandlesLayerEl) return;
+  if (!isPlanViewActive()) {
+    cableHandlesLayerEl.innerHTML = '';
+    return;
+  }
   cableHandlesLayerEl.innerHTML = '';
   if (!state.selectedSurface || state.selectedSurface.type !== 'cable') return;
   const cable = state.cables.find(c => c.id === state.selectedSurface.id);
@@ -2806,6 +3486,7 @@ function renderCableHandles() {
 }
 
 function insertCableBendPoint(cable, approxPoint) {
+  if (!isPlanViewActive()) return false;
   if (!cable) return false;
   const start = resolveSocketPosition(cable.source);
   const end = resolveSocketPosition(cable.target);
@@ -3006,6 +3687,7 @@ function insertCableBendPoint(cable, approxPoint) {
   }
   document.addEventListener('pointermove', evt => {
     if (!drag) return;
+    if (!isPlanViewActive()) return;
     const cable = state.cables.find(c => c.id === drag.cableId);
     if (!cable) return;
     const pt = svgPoint(evt);

@@ -682,6 +682,22 @@ function normalizeFloorItemFromLayout(item) {
   };
 }
 
+function getWallItemMountHeight(item) {
+  if (!item) return DEFAULT_WALL_MOUNT_HEIGHT_MM;
+  const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+  const fallback = def.mountHeightMm !== undefined ? def.mountHeightMm : DEFAULT_WALL_MOUNT_HEIGHT_MM;
+  const source = typeof item.mountHeight_mm === 'number'
+    ? item.mountHeight_mm
+    : typeof item.mount_height_mm === 'number'
+      ? item.mount_height_mm
+      : typeof item.mountHeight === 'number'
+        ? item.mountHeight
+        : typeof item.mount_height === 'number'
+          ? item.mount_height
+          : fallback;
+  return clamp(toNumber(source, fallback), 0, DEFAULT_ROOM_HEIGHT_MM);
+}
+
 function normalizeWallItemFromLayout(item) {
   if (!item || typeof item !== 'object') return null;
   const type = item.type || 'socket';
@@ -691,13 +707,6 @@ function normalizeWallItemFromLayout(item) {
   if (typeof wallRef === 'number') wallRef = `base:${wallRef}`;
   if (typeof wallRef === 'string' && /^\d$/.test(wallRef)) wallRef = `base:${wallRef}`;
   const depth = item.h !== undefined ? item.h : def.defaultDepth;
-  const mountHeightSource =
-    item.mount_height_mm !== undefined ? item.mount_height_mm
-    : item.mountHeight_mm !== undefined ? item.mountHeight_mm
-    : item.mount_height !== undefined ? item.mount_height
-    : item.mountHeight !== undefined ? item.mountHeight
-      : undefined;
-  const fallbackMount = def.mountHeightMm !== undefined ? def.mountHeightMm : 1200;
   const normalized = {
     id,
     type,
@@ -705,10 +714,9 @@ function normalizeWallItemFromLayout(item) {
     s: toNumber(item.s, 0),
     h: toNumber(depth, def.defaultDepth)
   };
-  if (mountHeightSource !== undefined) {
-    normalized.mountHeight_mm = toNumber(mountHeightSource, fallbackMount);
-  } else if (def.mountHeightMm !== undefined) {
-    normalized.mountHeight_mm = def.mountHeightMm;
+  const mountHeight = getWallItemMountHeight({ ...item, type });
+  if (Number.isFinite(mountHeight)) {
+    normalized.mountHeight_mm = mountHeight;
   }
   return normalized;
 }
@@ -1594,6 +1602,43 @@ function defaultHudMessage() {
   return `${snapStr} | Selected: ${sel}`;
 }
 
+function applySelectedWallItemMountHeight(heightMm) {
+  if (!state.selectedSurface || state.selectedSurface.type !== 'wallItem') return;
+  const item = state.wallItems.find(w => w.id === state.selectedSurface.id);
+  if (!item) return;
+  const def = WALL_ITEM_DEFS[item.type] || WALL_ITEM_DEFS.socket;
+  const clamped = clamp(Number(heightMm) || 0, 0, DEFAULT_ROOM_HEIGHT_MM);
+  const snapped = snapValue(clamped);
+  if (item.mountHeight_mm === snapped) return;
+  item.mountHeight_mm = snapped;
+  showHud(`Set ${def.label} height to ${fmtLen(snapped)}.`);
+  render();
+}
+
+function updateWallItemControls() {
+  if (!wallItemControlsEl) return;
+  const selected = state.selectedSurface && state.selectedSurface.type === 'wallItem'
+    ? state.wallItems.find(w => w.id === state.selectedSurface.id)
+    : null;
+  const def = selected ? WALL_ITEM_DEFS[selected.type] || WALL_ITEM_DEFS.socket : null;
+  const mountHeight = selected ? getWallItemMountHeight(selected) : DEFAULT_WALL_MOUNT_HEIGHT_MM;
+  const message = selected
+    ? `${def ? def.label : 'Wall item'} height ${fmtLen(mountHeight)}`
+    : 'Select a wall-mounted item to edit its mount height.';
+  if (wallItemSelectionNoteEl) {
+    wallItemSelectionNoteEl.textContent = message;
+  }
+  const sliderValue = Math.round(mountHeight);
+  if (wallItemMountSliderEl) {
+    wallItemMountSliderEl.disabled = !selected;
+    wallItemMountSliderEl.value = `${sliderValue}`;
+  }
+  if (wallItemMountInputEl) {
+    wallItemMountInputEl.disabled = !selected;
+    wallItemMountInputEl.value = `${sliderValue}`;
+  }
+}
+
 function render() {
   updateWallSelect();
   const type = orientationType();
@@ -1608,6 +1653,7 @@ function render() {
   }
   updateOrientationActiveState();
   renderScaleOverlay();
+  updateWallItemControls();
   hud.textContent = hudTransient || defaultHudMessage();
   hudTransient = null;
   maybePersistLayout();
@@ -2741,7 +2787,26 @@ const FALLBACK_CABLE_COLORS = (function () {
   return colors;
 })();
 const DEFAULT_ROOM_HEIGHT_MM = 3000;
+const DEFAULT_WALL_MOUNT_HEIGHT_MM = 1200;
 const CABLE_SAMPLE_SEGMENTS = 48;
+const CABLE_LATERAL_SLACK_RATIO = 0.25;
+const CABLE_SAG_RATIO = 0.3;
+const CABLE_SAG_MIN_MM = 150;
+const CABLE_SAG_MAX_MM = 1200;
+const WALL_ITEM_CONTROLS_TEMPLATE = `
+      <div class="panel" id="wallItemControls">
+        <h3>Wall Item Details</h3>
+        <div class="note" id="wallItemSelectionNote">Select a wall-mounted item to edit its mount height.</div>
+        <label>
+          Adjust mount height
+          <input type="range" id="wallItemMountHeightSlider" min="0" max="${DEFAULT_ROOM_HEIGHT_MM}" step="10" disabled>
+        </label>
+        <label>
+          Mount height (mm)
+          <input type="number" id="wallItemMountHeight" min="0" max="${DEFAULT_ROOM_HEIGHT_MM}" step="10" disabled>
+        </label>
+      </div>
+`;
 const CABLE_CONTROLS_TEMPLATE = `
       <div class="panel" id="cableControls">
         <h3>Service Cables</h3>
@@ -2758,6 +2823,10 @@ const CABLE_CONTROLS_TEMPLATE = `
       </div>
 `;
 
+let wallItemControlsEl = null;
+let wallItemMountInputEl = null;
+let wallItemMountSliderEl = null;
+let wallItemSelectionNoteEl = null;
 let cableTypeSelectEl = null;
 let cancelCableBtnEl = null;
 let deleteCableBtnEl = null;
@@ -2932,8 +3001,10 @@ function resolveSocketPosition(ref) {
       x: base.x + geom.normal.x * depth,
       y: base.y + geom.normal.y * depth
     };
+    const mountHeight = getWallItemMountHeight(item);
     const heightBasis = meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : DEFAULT_ROOM_HEIGHT_MM;
-    const height = heightBasis * (anchor.w || 0.5);
+    const anchorOffset = (anchor.w != null ? anchor.w - 0.5 : 0) * heightBasis;
+    const height = clamp(mountHeight + anchorOffset, 0, DEFAULT_ROOM_HEIGHT_MM);
     return { x: tip.x, y: tip.y, z: height };
   }
   return null;
@@ -2967,8 +3038,12 @@ function defaultHandlesForSegment(start, end) {
   const length = Math.hypot(dx, dy) || 1;
   const nx = -dy / length;
   const ny = dx / length;
-  const slack = length * 0.25;
-  const midZ = (start.z + end.z) / 2;
+  const slack = length * CABLE_LATERAL_SLACK_RATIO;
+  const startZ = Number.isFinite(start.z) ? start.z : DEFAULT_ROOM_HEIGHT_MM / 2;
+  const endZ = Number.isFinite(end.z) ? end.z : DEFAULT_ROOM_HEIGHT_MM / 2;
+  const baseHeight = Math.min(startZ, endZ);
+  const sag = clamp(length * CABLE_SAG_RATIO, CABLE_SAG_MIN_MM, CABLE_SAG_MAX_MM);
+  const midZ = Math.max(baseHeight - sag, 0);
   return [
     {
       x: start.x + dx * 0.25 + nx * slack,
@@ -3060,16 +3135,32 @@ function updateCableMetrics(cable, start, end) {
 }
 
 function exportCableToSnapshot(cable) {
-  const safePoints = (cable.controlPoints || []).map(pt => ({
-    u: clamp(pt.x / state.Wmm, 0, 1),
-    v: clamp(pt.y / state.Lmm, 0, 1),
-    w: clamp((pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM, 0, 1)
-  }));
-  const bendPoints = (cable.bendPoints || []).map(pt => ({
-    u: clamp(pt.x / state.Wmm, 0, 1),
-    v: clamp(pt.y / state.Lmm, 0, 1),
-    w: clamp((pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM, 0, 1)
-  }));
+  const safePoints = (cable.controlPoints || []).map(pt => {
+    const rawU = Number(pt.x) / state.Wmm;
+    const rawV = Number(pt.y) / state.Lmm;
+    const rawW = Number(pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM;
+    return {
+      u: Number.isFinite(rawU) ? rawU : 0,
+      v: Number.isFinite(rawV) ? rawV : 0,
+      w: Number.isFinite(rawW) ? rawW : 0,
+      x_mm: Number.isFinite(pt.x) ? pt.x : 0,
+      y_mm: Number.isFinite(pt.y) ? pt.y : 0,
+      z_mm: Number.isFinite(pt.z) ? pt.z : 0
+    };
+  });
+  const bendPoints = (cable.bendPoints || []).map(pt => {
+    const rawU = Number(pt.x) / state.Wmm;
+    const rawV = Number(pt.y) / state.Lmm;
+    const rawW = Number(pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM;
+    return {
+      u: Number.isFinite(rawU) ? rawU : 0,
+      v: Number.isFinite(rawV) ? rawV : 0,
+      w: Number.isFinite(rawW) ? rawW : 0,
+      x_mm: Number.isFinite(pt.x) ? pt.x : 0,
+      y_mm: Number.isFinite(pt.y) ? pt.y : 0,
+      z_mm: Number.isFinite(pt.z) ? pt.z : 0
+    };
+  });
   return {
     id: cable.id,
     cableType: cable.cableType,
@@ -3119,12 +3210,19 @@ function normalizeCableFromLayout(entry) {
           const u = Number(pt.u);
           const v = Number(pt.v);
           const w = Number(pt.w != null ? pt.w : pt.z);
-          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-          return {
-            x: clamp(u, 0, 1) * state.Wmm,
-            y: clamp(v, 0, 1) * state.Lmm,
-            z: Number.isFinite(w) ? clamp(w, 0, 1) * DEFAULT_ROOM_HEIGHT_MM : 0
-          };
+          const xMm = Number(pt.x_mm);
+          const yMm = Number(pt.y_mm);
+          const zMm = Number(pt.z_mm);
+          const hasNormalized = Number.isFinite(u) && Number.isFinite(v);
+          const x = Number.isFinite(xMm) ? xMm : hasNormalized ? u * state.Wmm : null;
+          const y = Number.isFinite(yMm) ? yMm : hasNormalized ? v * state.Lmm : null;
+          const z = Number.isFinite(zMm)
+            ? zMm
+            : Number.isFinite(w)
+              ? w * DEFAULT_ROOM_HEIGHT_MM
+              : 0;
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          return { x, y, z };
         })
         .filter(Boolean)
     : [];
@@ -3135,12 +3233,19 @@ function normalizeCableFromLayout(entry) {
           const u = Number(pt.u);
           const v = Number(pt.v);
           const w = Number(pt.w != null ? pt.w : pt.z);
-          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-          return {
-            x: clamp(u, 0, 1) * state.Wmm,
-            y: clamp(v, 0, 1) * state.Lmm,
-            z: Number.isFinite(w) ? clamp(w, 0, 1) * DEFAULT_ROOM_HEIGHT_MM : 0
-          };
+          const xMm = Number(pt.x_mm);
+          const yMm = Number(pt.y_mm);
+          const zMm = Number(pt.z_mm);
+          const hasNormalized = Number.isFinite(u) && Number.isFinite(v);
+          const x = Number.isFinite(xMm) ? xMm : hasNormalized ? u * state.Wmm : null;
+          const y = Number.isFinite(yMm) ? yMm : hasNormalized ? v * state.Lmm : null;
+          const z = Number.isFinite(zMm)
+            ? zMm
+            : Number.isFinite(w)
+              ? w * DEFAULT_ROOM_HEIGHT_MM
+              : 0;
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          return { x, y, z };
         })
         .filter(Boolean)
     : [];
@@ -3492,11 +3597,11 @@ function insertCableBendPoint(cable, approxPoint) {
   const end = resolveSocketPosition(cable.target);
   if (!start || !end) return false;
   const snapped = snapPoint(approxPoint);
-  const clamped = clampPointToRoom(snapped);
+  const rawPoint = snapped;
   let insertIndex = Array.isArray(cable.bendPoints) ? cable.bendPoints.length : 0;
   let finalPoint = {
-    x: clamped.x,
-    y: clamped.y,
+    x: rawPoint.x,
+    y: rawPoint.y,
     z: (start.z + end.z) / 2
   };
   const cache = cableCurveCache.get(cable.id);
@@ -3505,7 +3610,7 @@ function insertCableBendPoint(cable, approxPoint) {
   if (samples.length > 0 && anchors.length > 1) {
     let best = null;
     samples.forEach(sample => {
-      const dist = distance2d(clamped, sample.point);
+      const dist = distance2d(rawPoint, sample.point);
       if (!best || dist < best.dist) {
         best = { dist, sample };
       }
@@ -3519,16 +3624,16 @@ function insertCableBendPoint(cable, approxPoint) {
       const c2 = cable.controlPoints[seg * 2 + 1];
       const precise = cubicPoint(best.sample.t, p0, c1, c2, p3);
       finalPoint = {
-        x: clamp(precise.x, 0, state.Wmm),
-        y: clamp(precise.y, 0, state.Lmm),
+        x: precise.x,
+        y: precise.y,
         z: Number.isFinite(precise.z) ? precise.z : finalPoint.z
       };
     }
   }
   const snappedFinal = snapPoint(finalPoint);
   const bendPoint = {
-    x: clamp(snappedFinal.x, 0, state.Wmm),
-    y: clamp(snappedFinal.y, 0, state.Lmm),
+    x: snappedFinal.x,
+    y: snappedFinal.y,
     z: finalPoint.z
   };
   if (!Array.isArray(cable.bendPoints)) cable.bendPoints = [];
@@ -3538,6 +3643,37 @@ function insertCableBendPoint(cable, approxPoint) {
   showHud('Added bend point.');
   return true;
 }
+
+ (function setupWallItemControls() {
+  const aside = document.querySelector('aside');
+  if (!aside) return;
+  aside.insertAdjacentHTML('beforeend', WALL_ITEM_CONTROLS_TEMPLATE);
+  wallItemControlsEl = document.getElementById('wallItemControls');
+  wallItemMountInputEl = document.getElementById('wallItemMountHeight');
+  wallItemMountSliderEl = document.getElementById('wallItemMountHeightSlider');
+  wallItemSelectionNoteEl = document.getElementById('wallItemSelectionNote');
+  if (wallItemMountSliderEl) {
+    wallItemMountSliderEl.addEventListener('input', evt => {
+      const value = Number(evt.target.value);
+      if (!Number.isFinite(value)) return;
+      if (wallItemMountInputEl) {
+        wallItemMountInputEl.value = `${Math.round(value)}`;
+      }
+      applySelectedWallItemMountHeight(value);
+    });
+  }
+  if (wallItemMountInputEl) {
+    wallItemMountInputEl.addEventListener('change', evt => {
+      const value = Number(evt.target.value);
+      if (!Number.isFinite(value)) return;
+      if (wallItemMountSliderEl) {
+        wallItemMountSliderEl.value = `${Math.round(value)}`;
+      }
+      applySelectedWallItemMountHeight(value);
+    });
+  }
+  updateWallItemControls();
+})();
 
 (function setupCablePrototype() {
   const aside = document.querySelector('aside');
@@ -3691,7 +3827,10 @@ function insertCableBendPoint(cable, approxPoint) {
     const cable = state.cables.find(c => c.id === drag.cableId);
     if (!cable) return;
     const pt = svgPoint(evt);
-    const roomPt = clampPointToRoom(svgPointToRoomMm(pt));
+    const rawRoomPt = svgPointToRoomMm(pt);
+    const roomPt = drag.kind === 'cable-handle' || drag.kind === 'cable-bend'
+      ? rawRoomPt
+      : clampPointToRoom(rawRoomPt);
     const snapped = snapPoint(roomPt);
     if (drag.kind === 'cable-handle') {
       const handle = cable.controlPoints[drag.handleIndex];

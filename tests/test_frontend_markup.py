@@ -186,3 +186,42 @@ def test_fps_viewer_uses_human_scale_height_and_markers() -> None:
     assert "function createLabelSprite" in html
     assert "const HUMAN_EYE_HEIGHT_M" in html
     assert "camera.position.set(0, HUMAN_EYE_HEIGHT_M, 5);" in html
+
+
+def test_room_survey_exposes_wall_mount_height_controls() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="wallItemControls"' in html
+    assert 'id="wallItemMountHeight"' in html
+    assert 'id="wallItemMountHeightSlider"' in html
+    assert "function updateWallItemControls" in html
+
+
+def test_room_survey_exports_unclamped_cable_points() -> None:
+    html = Path("dev/room_survey_min/room_survey_min_v1.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const rawU = Number(pt.x) / state.Wmm;" in html
+    assert "const rawV = Number(pt.y) / state.Lmm;" in html
+    assert "const rawW = Number(pt.z || 0) / DEFAULT_ROOM_HEIGHT_MM;" in html
+
+
+def test_fps_viewer_syncs_layout_storage_updates() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function handleLayoutStorageEvent" in html
+    assert "window.addEventListener('storage', handleLayoutStorageEvent);" in html
+
+
+def test_fps_viewer_respects_wall_mount_heights() -> None:
+    html = Path("dev/interactive_3d_room/interactive_3d_room_fps_demo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "mountHeight_mm" in html
+    assert "const fallbackMount" in html

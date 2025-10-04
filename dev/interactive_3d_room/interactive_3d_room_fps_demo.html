@@ -326,6 +326,11 @@
     };
 
     const ROOM_HEIGHT_MM = 3000; // align with survey default (3 m)
+    const DEFAULT_WALL_MOUNT_HEIGHT_MM = 1200;
+    const CABLE_LATERAL_SLACK_RATIO = 0.25;
+    const CABLE_SAG_RATIO = 0.3;
+    const CABLE_SAG_MIN_MM = 150;
+    const CABLE_SAG_MAX_MM = 1200;
     const HUMAN_EYE_HEIGHT_M = 1.75; // ~5'9" eye level for first-person scale
     const DEFAULT_WALL_THICKNESS_MM = 200;
     const DOOR_DEFAULT_THICKNESS_MM = 80;
@@ -358,6 +363,7 @@
         assetKey: 'wall_socket',
         defaultDepthMm: 300,
         color: 0xf9a825,
+        mountHeightMm: 1200,
         sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
@@ -375,6 +381,7 @@
         assetKey: 'wall_gas_socket',
         defaultDepthMm: 300,
         color: 0x22c55e,
+        mountHeightMm: 1400,
         sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
@@ -392,6 +399,7 @@
         assetKey: 'wall_feedthrough',
         defaultDepthMm: 200,
         color: 0x0ea5e9,
+        mountHeightMm: 1300,
         sizeMm: { ...WALL_ITEM_DEFAULT_SIZE_MM },
         fallbackSockets: [
           {
@@ -880,12 +888,15 @@
       const type = typeof item.type === 'string' ? item.type : 'socket';
       const meta = WALL_ITEM_META[type] || WALL_ITEM_META.socket;
       const depth = item.h !== undefined ? item.h : meta.defaultDepthMm;
+      const mountSource = item.mount_height_mm ?? item.mountHeight_mm ?? item.mount_height ?? item.mountHeight;
+      const fallbackMount = meta.mountHeightMm !== undefined ? meta.mountHeightMm : DEFAULT_WALL_MOUNT_HEIGHT_MM;
       return {
         ...item,
         type,
         wall: wallRef || 'base:1',
         s: toNumber(item.s, 0),
-        h: toNumber(depth, meta.defaultDepthMm)
+        h: toNumber(depth, meta.defaultDepthMm),
+        mountHeight_mm: toNumber(mountSource !== undefined ? mountSource : fallbackMount, fallbackMount)
       };
     }
 
@@ -997,12 +1008,19 @@
               const u = Number(pt.u);
               const v = Number(pt.v);
               const w = Number(pt.w != null ? pt.w : pt.z);
-              if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-              return {
-                x: clamp(u, 0, 1) * layout.room.Wmm,
-                y: clamp(v, 0, 1) * layout.room.Lmm,
-                z: Number.isFinite(w) ? clamp(w, 0, 1) * ROOM_HEIGHT_MM : ROOM_HEIGHT_MM / 2
-              };
+              const xMm = Number(pt.x_mm);
+              const yMm = Number(pt.y_mm);
+              const zMm = Number(pt.z_mm);
+              const hasNormalized = Number.isFinite(u) && Number.isFinite(v);
+              const x = Number.isFinite(xMm) ? xMm : hasNormalized ? u * layout.room.Wmm : null;
+              const y = Number.isFinite(yMm) ? yMm : hasNormalized ? v * layout.room.Lmm : null;
+              const z = Number.isFinite(zMm)
+                ? zMm
+                : Number.isFinite(w)
+                  ? w * ROOM_HEIGHT_MM
+                  : ROOM_HEIGHT_MM / 2;
+              if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+              return { x, y, z };
             })
             .filter(Boolean)
         : [];
@@ -1013,12 +1031,19 @@
               const u = Number(pt.u);
               const v = Number(pt.v);
               const w = Number(pt.w != null ? pt.w : pt.z);
-              if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-              return {
-                x: clamp(u, 0, 1) * layout.room.Wmm,
-                y: clamp(v, 0, 1) * layout.room.Lmm,
-                z: Number.isFinite(w) ? clamp(w, 0, 1) * ROOM_HEIGHT_MM : ROOM_HEIGHT_MM / 2
-              };
+              const xMm = Number(pt.x_mm);
+              const yMm = Number(pt.y_mm);
+              const zMm = Number(pt.z_mm);
+              const hasNormalized = Number.isFinite(u) && Number.isFinite(v);
+              const x = Number.isFinite(xMm) ? xMm : hasNormalized ? u * layout.room.Wmm : null;
+              const y = Number.isFinite(yMm) ? yMm : hasNormalized ? v * layout.room.Lmm : null;
+              const z = Number.isFinite(zMm)
+                ? zMm
+                : Number.isFinite(w)
+                  ? w * ROOM_HEIGHT_MM
+                  : ROOM_HEIGHT_MM / 2;
+              if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+              return { x, y, z };
             })
             .filter(Boolean)
         : [];
@@ -1036,16 +1061,32 @@
     }
 
     function exportCableSnapshot(cable) {
-      const safePoints = (cable.controlPoints || []).map(pt => ({
-        u: clamp(pt.x / layout.room.Wmm, 0, 1),
-        v: clamp(pt.y / layout.room.Lmm, 0, 1),
-        w: clamp((pt.z || 0) / ROOM_HEIGHT_MM, 0, 1)
-      }));
-      const bendPoints = (cable.bendPoints || []).map(pt => ({
-        u: clamp(pt.x / layout.room.Wmm, 0, 1),
-        v: clamp(pt.y / layout.room.Lmm, 0, 1),
-        w: clamp((pt.z || 0) / ROOM_HEIGHT_MM, 0, 1)
-      }));
+      const safePoints = (cable.controlPoints || []).map(pt => {
+        const rawU = Number(pt.x) / layout.room.Wmm;
+        const rawV = Number(pt.y) / layout.room.Lmm;
+        const rawW = Number(pt.z || 0) / ROOM_HEIGHT_MM;
+        return {
+          u: Number.isFinite(rawU) ? rawU : 0,
+          v: Number.isFinite(rawV) ? rawV : 0,
+          w: Number.isFinite(rawW) ? rawW : 0,
+          x_mm: Number.isFinite(pt.x) ? pt.x : 0,
+          y_mm: Number.isFinite(pt.y) ? pt.y : 0,
+          z_mm: Number.isFinite(pt.z) ? pt.z : 0
+        };
+      });
+      const bendPoints = (cable.bendPoints || []).map(pt => {
+        const rawU = Number(pt.x) / layout.room.Wmm;
+        const rawV = Number(pt.y) / layout.room.Lmm;
+        const rawW = Number(pt.z || 0) / ROOM_HEIGHT_MM;
+        return {
+          u: Number.isFinite(rawU) ? rawU : 0,
+          v: Number.isFinite(rawV) ? rawV : 0,
+          w: Number.isFinite(rawW) ? rawW : 0,
+          x_mm: Number.isFinite(pt.x) ? pt.x : 0,
+          y_mm: Number.isFinite(pt.y) ? pt.y : 0,
+          z_mm: Number.isFinite(pt.z) ? pt.z : 0
+        };
+      });
       return {
         id: cable.id,
         cableType: cable.cableType,
@@ -1120,8 +1161,11 @@
           x: base.x + geom.normal.x * depth,
           y: base.y + geom.normal.y * depth
         };
+        const fallbackMount = meta.mountHeightMm !== undefined ? meta.mountHeightMm : DEFAULT_WALL_MOUNT_HEIGHT_MM;
+        const mountHeight = clamp(toNumber(item.mountHeight_mm, fallbackMount), 0, ROOM_HEIGHT_MM);
         const bboxHeight = meta.boundingBox_mm && meta.boundingBox_mm.h ? meta.boundingBox_mm.h : ROOM_HEIGHT_MM;
-        const height = bboxHeight * (anchor.w || 0.5);
+        const anchorOffset = (anchor.w != null ? anchor.w - 0.5 : 0) * bboxHeight;
+        const height = clamp(mountHeight + anchorOffset, 0, ROOM_HEIGHT_MM);
         return { x: tip.x, y: tip.y, z: height };
       }
       return null;
@@ -1157,8 +1201,12 @@
       const planarLength = Math.hypot(dx, dy) || 1;
       const nx = -dy / planarLength;
       const ny = dx / planarLength;
-      const slack = planarLength * 0.25;
-      const midZ = (startMm.z + endMm.z) / 2;
+      const slack = planarLength * CABLE_LATERAL_SLACK_RATIO;
+      const startZ = Number.isFinite(startMm.z) ? startMm.z : ROOM_HEIGHT_MM / 2;
+      const endZ = Number.isFinite(endMm.z) ? endMm.z : ROOM_HEIGHT_MM / 2;
+      const baseHeight = Math.min(startZ, endZ);
+      const sag = clamp(planarLength * CABLE_SAG_RATIO, CABLE_SAG_MIN_MM, CABLE_SAG_MAX_MM);
+      const midZ = Math.max(baseHeight - sag, 0);
       return [
         {
           x: startMm.x + dx * 0.25 + nx * slack,
@@ -1847,6 +1895,8 @@
         const width = mm2m(widthMm);
         const height = mm2m(heightMm);
         const depth = mm2m(extrudeMm);
+        const fallbackMount = meta.mountHeightMm !== undefined ? meta.mountHeightMm : DEFAULT_WALL_MOUNT_HEIGHT_MM;
+        const mountHeight = clamp(toNumber(item.mountHeight_mm, fallbackMount), 0, ROOM_HEIGHT_MM);
         const geometry = new THREE.BoxGeometry(width, height, depth);
         const material = new THREE.MeshStandardMaterial({
           color: meta.color || 0xf9a825,
@@ -1854,7 +1904,7 @@
           metalness: 0.12
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(world.x, mm2m(heightMm / 2), world.z);
+        mesh.position.set(world.x, mm2m(mountHeight), world.z);
         mesh.rotation.y = -Math.atan2(geom.tangent.y, geom.tangent.x);
         mesh.userData.wallItemId = item.id;
         wallItemGroup.add(mesh);
@@ -2494,11 +2544,39 @@
       });
     }
 
+    let pendingStorageSync = null;
+
+    async function ingestLayoutFromSerialized(raw, options = {}) {
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        const data = coerceLayoutPayload(parsed);
+        if (data) {
+          await ingestLayout(data, options);
+        }
+      } catch (err) {
+        console.warn('Failed to ingest layout from storage event', err);
+      }
+    }
+
+    function handleLayoutStorageEvent(event) {
+      if (!event || event.key !== LAYOUT_STORAGE_KEY) return;
+      if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (!event.newValue) return;
+      if (pendingStorageSync) {
+        clearTimeout(pendingStorageSync);
+      }
+      pendingStorageSync = window.setTimeout(() => {
+        pendingStorageSync = null;
+        ingestLayoutFromSerialized(event.newValue, { local: false, remote: false });
+      }, 80);
+    }
+
     function onWindowResize() {
       updateRendererSize();
     }
 
     window.addEventListener('resize', onWindowResize);
+    window.addEventListener('storage', handleLayoutStorageEvent);
 
     resetLayout({ local: false, remote: false });
     updateRendererSize();
